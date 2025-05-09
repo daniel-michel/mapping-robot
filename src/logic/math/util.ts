@@ -39,7 +39,7 @@ export function angleDiffAbs(first: number, second: number): number {
 	}
 }
 export function angleDiff(first: number, second: number): number {
-	const diff = mod(second - first, Math.PI * 2);
+	const diff = mod(first - second, Math.PI * 2);
 	if (diff > Math.PI) {
 		return diff - Math.PI * 2;
 	} else {

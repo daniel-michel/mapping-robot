@@ -1,6 +1,19 @@
+import { RotoTranslation } from "./math/roto-translation";
 import { interpolateAngle } from "./math/util";
 import { Vec2 } from "./math/vec";
-import { Camera } from "./simulation";
+
+export type Camera = {
+	transform: RotoTranslation;
+	scale: number;
+};
+
+export function rotoTranslateCtx(
+	ctx: CanvasRenderingContext2D,
+	transform: RotoTranslation
+) {
+	ctx.translate(transform.translation.x, transform.translation.y);
+	ctx.rotate(transform.rotation);
+}
 
 export const savedState =
 	(ctx: CanvasRenderingContext2D) => (callback: () => void) => {
@@ -14,20 +27,17 @@ export const savedState =
 
 export function interpolateCamera(
 	camera: Camera,
-	target: {
-		position: Vec2;
-		orientation: number;
-	},
+	target: RotoTranslation,
 	time: number
 ) {
-	camera.position = Vec2.interpolate(
-		camera.position,
-		target.position,
+	camera.transform.translation = Vec2.interpolate(
+		camera.transform.translation,
+		target.translation,
 		Math.min(0.001 / time, 1)
 	);
-	camera.orientation = interpolateAngle(
-		camera.orientation,
-		target.orientation,
+	camera.transform.rotation = interpolateAngle(
+		camera.transform.rotation,
+		target.rotation,
 		Math.min(0.001 / time, 1)
 	);
 	return camera;

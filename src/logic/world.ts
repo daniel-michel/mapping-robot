@@ -71,10 +71,10 @@ export class World {
 		const size = 500;
 		const walls: Line[] = [];
 		walls.push(
-			...fractalWall([0, 0], [size, 0], 4),
-			...fractalWall([size, 0], [size, size], 4),
-			...fractalWall([size, size], [0, size], 4),
-			...fractalWall([0, size], [0, 0], 4)
+			...fractalWall([-100, -250], [size - 100, -250], 4),
+			...fractalWall([size - 100, -250], [size - 100, size - 250], 4),
+			...fractalWall([size - 100, size - 250], [-100, size - 250], 4),
+			...fractalWall([-100, size - 250], [-100, -250], 4)
 		);
 		return new World(walls);
 	}

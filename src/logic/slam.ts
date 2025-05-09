@@ -1,4 +1,4 @@
-import { Mat3 } from "./math/mat";
+import { RotoTranslation } from "./math/roto-translation";
 import { interpolateAngle } from "./math/util";
 import { Vec2 } from "./math/vec";
 import { RangingSensorScan } from "./robot";
@@ -13,8 +13,7 @@ export type Constraint = {
 export class PoseGraph {
 	constraints: Constraint[] = [];
 	constraintsByNode: Map<number, Constraint[]> = new Map();
-	nodeEstimates: Map<number, { position: Vec2; orientation: number }> =
-		new Map();
+	nodeEstimates: Map<number, RotoTranslation> = new Map();
 
 	addConstraint(constraint: Constraint) {
 		this.constraints.push(constraint);
@@ -29,19 +28,13 @@ export class PoseGraph {
 	getNodeEstimate(node: number) {
 		const estimate = this.nodeEstimates.get(node);
 		if (!estimate) {
-			return {
-				position: new Vec2([0, 0]),
-				orientation: 0,
-			};
+			return new RotoTranslation(0, new Vec2([0, 0]));
 		}
 		return estimate;
 	}
 	getNodeEstimateMat(node: number) {
 		const estimate = this.getNodeEstimate(node);
-		const mat = Mat3.translate(estimate.position).mul(
-			Mat3.rotation(estimate.orientation)
-		);
-		return mat;
+		return estimate.matrix();
 	}
 
 	optimize(iterations: number) {
@@ -89,20 +82,18 @@ export class PoseGraph {
 					return;
 				}
 				if (!isFirst) {
-					const orientation = otherEstimate.orientation + constraint.rotation;
-					const position = otherEstimate.position
+					const orientation = otherEstimate.rotation + constraint.rotation;
+					const position = otherEstimate.translation
 						.copy()
-						.add(
-							constraint.translation.copy().rotate(otherEstimate.orientation)
-						);
+						.add(constraint.translation.copy().rotate(otherEstimate.rotation));
 					return {
 						orientation,
 						position,
 						strength: constraint.strength,
 					};
 				} else {
-					const orientation = otherEstimate.orientation - constraint.rotation;
-					const position = otherEstimate.position
+					const orientation = otherEstimate.rotation - constraint.rotation;
+					const position = otherEstimate.translation
 						.copy()
 						.add(constraint.translation.copy().mul(-1).rotate(orientation));
 					return {
@@ -116,10 +107,7 @@ export class PoseGraph {
 		if (locations.length < 1) {
 			const estimate = this.nodeEstimates.get(node);
 			if (!estimate) {
-				this.nodeEstimates.set(node, {
-					orientation: 0,
-					position: new Vec2([0, 0]),
-				});
+				this.nodeEstimates.set(node, new RotoTranslation(0, new Vec2([0, 0])));
 			}
 			return;
 		}
@@ -139,10 +127,7 @@ export class PoseGraph {
 				loc.strength / strength
 			);
 		}
-		this.nodeEstimates.set(node, {
-			orientation,
-			position,
-		});
+		this.nodeEstimates.set(node, new RotoTranslation(orientation, position));
 	}
 }
 
@@ -157,12 +142,12 @@ export class Slam {
 		new Map();
 	poseId = 0;
 
-	move(translation: Vec2, rotation: number) {
+	move(rotoTranslation: RotoTranslation) {
 		const newPoseId = this.poseId + 1;
 		const constraint: Constraint = {
 			nodes: [this.poseId, newPoseId],
-			translation: translation.copy(),
-			rotation,
+			translation: rotoTranslation.translation.copy(),
+			rotation: rotoTranslation.rotation,
 			strength: 0.1,
 		};
 		this.poseGraph.addConstraint(constraint);
@@ -170,11 +155,9 @@ export class Slam {
 		return this.poseId;
 	}
 	addScan(scan: RangingSensorScan) {
-		const points = scan.distances.map((d, i) => {
-			const angle = scan.angleStep * i - scan.angle / 2;
-			const direction = new Vec2([0, 1]).rotate(angle);
-			return direction.mul(d);
-		});
+		const points = scan.points
+			.map((p) => p.point?.copy())
+			.filter((p) => p !== undefined);
 		const surfaces: Surface[] = [];
 		for (let i = 0; i < points.length; i++) {
 			const current = surfaces.at(-1);

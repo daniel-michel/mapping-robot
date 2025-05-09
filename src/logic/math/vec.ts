@@ -40,6 +40,16 @@ export class Vec2 {
 		return new Vec2([this.x, this.y]);
 	}
 
+	freeze() {
+		return Object.freeze(this);
+	}
+
+	set(vec: Vec2Like) {
+		this.x = vec[0];
+		this.y = vec[1];
+		return this;
+	}
+
 	add(other: Vec2Like) {
 		this.x += other[0];
 		this.y += other[1];

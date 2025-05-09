@@ -3,8 +3,9 @@ import { customElement } from "lit/decorators.js";
 import { createRef, ref } from "lit/directives/ref.js";
 import { Simulation } from "../logic/simulation";
 import { Vec2 } from "../logic/math/vec";
-import { savedState } from "../logic/rendering";
+import { rotoTranslateCtx, savedState } from "../logic/rendering";
 import { RobotController } from "../logic/robot-controller";
+import { RotoTranslation } from "../logic/math/roto-translation";
 
 @customElement("simulation-renderer")
 export class SimulationRenderer extends LitElement {
@@ -14,17 +15,9 @@ export class SimulationRenderer extends LitElement {
 	simulation = new Simulation();
 	robotController = new RobotController(this.simulation.robot);
 	frameCount = 0;
-	// #world = World.generate(hashString("hello world"));
-	// #camera = {
-	// 	position: new Vec2([250, 250]),
-	// 	orientation: 0,
-	// 	scale: 1,
-	// };
-	// #robot = new Robot(10, 5);
 
 	constructor() {
 		super();
-		// this.#robot.driveAng(30, 31);
 		setTimeout(() => {
 			this.robotController.run();
 		}, 500);
@@ -64,7 +57,6 @@ export class SimulationRenderer extends LitElement {
 		canvas.height = clientHeight * window.devicePixelRatio;
 
 		const t = 1 / 60;
-		this.simulation.update(t);
 		ctx.clearRect(0, 0, clientWidth, clientHeight);
 
 		const splitX = clientWidth * 0.5;
@@ -94,6 +86,49 @@ export class SimulationRenderer extends LitElement {
 		ctx.strokeStyle = "#fff";
 		ctx.lineWidth = 1;
 		ctx.stroke();
+
+		const currentRobotPoseEstimate =
+			this.robotController.slam.poseGraph.getNodeEstimate(
+				this.robotController.slam.poseId
+			);
+		const currentRobotPoseEstimateWithRecentOdometry = RotoTranslation.combine(
+			currentRobotPoseEstimate,
+			this.robotController.odometrySinceLastScan.rotoTranslation
+		);
+		const initialRobotPoseEstimate =
+			this.robotController.slam.poseGraph.getNodeEstimate(0);
+		const currentRobotPose = this.simulation.robot.transform;
+		const relativePose = RotoTranslation.relative(
+			currentRobotPoseEstimateWithRecentOdometry,
+			initialRobotPoseEstimate
+		);
+		const robotEstimateError = RotoTranslation.relative(
+			relativePose,
+			currentRobotPose
+		);
+		saved(() => {
+			ctx.translate(clientWidth - 100, clientHeight - 100);
+			ctx.scale(1, -1);
+
+			ctx.globalCompositeOperation = "lighter";
+
+			const drawTriangle = () => {
+				ctx.beginPath();
+				ctx.moveTo(-4, -5);
+				ctx.lineTo(0, 10);
+				ctx.lineTo(4, -5);
+				ctx.fill();
+			};
+
+			saved(() => {
+				ctx.fillStyle = "#f42";
+				rotoTranslateCtx(ctx, robotEstimateError);
+				drawTriangle();
+			});
+
+			ctx.fillStyle = "#0bd";
+			drawTriangle();
+		});
 	}
 
 	static styles = css`

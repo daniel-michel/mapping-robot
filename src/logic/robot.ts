@@ -1,3 +1,4 @@
+import { RotoTranslation } from "./math/roto-translation";
 import { mod, random } from "./math/util";
 import { Ray, Vec2 } from "./math/vec";
 import { sleep } from "./util";
@@ -21,28 +22,36 @@ export type RangingSensorConfig = {
 	refreshTime: number;
 };
 export type RangingSensorScan = {
+	/** This describes the angle of the region in which the distances are measured */
 	angle: number;
+	/** The steps in angle between distance measurements */
 	angleStep: number;
+	/** Number of distance measurements */
 	angleCount: number;
-	distances: number[];
+	points: {
+		/** The angle of distance measurement relative to the center of the measurement region */
+		angle: number;
+		distance: number;
+		/** A point in the reference frame of the measurement, the center of the measurement region is along the positive y axis. */
+		point: Readonly<Vec2> | null;
+	}[];
 };
 
 export class SimulationRobot implements Robot {
 	world: World;
 	wheelBase: number;
 	wheelRadius: number;
-	position: Vec2 = new Vec2([0, 0]);
-	orientation: number = 0;
+	transform: RotoTranslation = new RotoTranslation(0, new Vec2([0, 0]));
 
 	rangingSensor: RangingSensorConfig = {
 		rotationAngle: 160 * DEG_TO_RAD,
 		/** this is the targeted step size not actually used */
 		targetAngleStepSize: 2 * DEG_TO_RAD,
 		distanceRange: [2, 780],
-		distanceAccuracy: 4,
-		// distanceAccuracy: 0,
-		angularAccuracy: 2.5 * DEG_TO_RAD,
-		// angularAccuracy: 0,
+		// distanceAccuracy: 4,
+		distanceAccuracy: 0,
+		// angularAccuracy: 2.5 * DEG_TO_RAD,
+		angularAccuracy: 0,
 		refreshTime: 1 / 50,
 	};
 
@@ -63,8 +72,8 @@ export class SimulationRobot implements Robot {
 	}
 
 	syncScan() {
-		const distances = this.rangingRays()
-			.map((ray) => {
+		const points: RangingSensorScan["points"] = this.rangingRays()
+			.map(({ ray, angle }) => {
 				const rotatedRay: Ray = [
 					Vec2.wrapped(ray[0]).copy(),
 					Vec2.wrapped(ray[1])
@@ -79,10 +88,22 @@ export class SimulationRobot implements Robot {
 						result.distance < this.rangingSensor.distanceRange[0] ||
 						result.distance > this.rangingSensor.distanceRange[1]
 					) {
-						return -1;
+						return {
+							angle,
+							distance: -1,
+							point: null,
+						};
 					}
 				}
-				return result?.distance ?? -1;
+				const distance = result?.distance ?? -1;
+				return {
+					angle,
+					distance,
+					point:
+						distance >= 0
+							? new Vec2([0, 1]).rotate(angle).mul(distance).freeze()
+							: null,
+				};
 			})
 			.toArray();
 		const { count: stepCount, size: angleStep } = this.#rangingSensorSteps;
@@ -90,7 +111,7 @@ export class SimulationRobot implements Robot {
 			angle: this.rangingSensor.rotationAngle,
 			angleStep,
 			angleCount: stepCount,
-			distances,
+			points,
 		} satisfies RangingSensorScan;
 	}
 
@@ -102,9 +123,11 @@ export class SimulationRobot implements Robot {
 		const { count: stepCount, size: angleStep } = this.#rangingSensorSteps;
 		for (let i = 0; i < stepCount; i++) {
 			const angle = (i - (stepCount - 1) / 2) * angleStep;
-			const direction = new Vec2([0, 1]).rotate(this.orientation + angle);
-			const ray: Ray = [this.position.copy(), direction];
-			yield ray;
+			const direction = new Vec2([0, 1]).rotate(
+				this.transform.rotation + angle
+			);
+			const ray: Ray = [this.transform.translation.copy(), direction];
+			yield { ray, angle };
 		}
 	}
 
@@ -113,49 +136,57 @@ export class SimulationRobot implements Robot {
 	}
 
 	async driveDist(left: number, right: number) {
-		this.positionHistory.push(this.position.copy());
+		this.positionHistory.push(this.transform.translation.copy());
 		if (this.positionHistory.length > 1_000) {
 			this.positionHistory.shift();
 		}
 
-		const originalOrientation = this.orientation;
-		const originalPosition = this.position.copy();
+		// const errorFactor = 0.05;
+		const errorFactor = 0;
+		const leftError = random([-1, 0.4]) * errorFactor * left;
+		const rightError = random([-1, 0.4]) * errorFactor * right;
+		left += leftError;
+		right += rightError;
+
+		const originalOrientation = this.transform.rotation;
+		const originalPosition = this.transform.translation.copy();
 		const animate = true;
 
 		if (animate) {
-			const speed = 0.1;
+			const speed = 0.2;
 			const duration = Math.max(
 				Math.max(Math.abs(left), Math.abs(right)) / speed,
-				200
+				// 200
+				0
 			);
 			const start = performance.now();
 			const end = start + duration;
 			while (performance.now() < end) {
 				const t = (performance.now() - start) / duration;
-				const { movement, rotation } = calculateOdometry(
+				const { translation, rotation } = calculateOdometry(
 					left * t,
 					right * t,
 					this.wheelBase
 				);
-				const absoluteMovement = movement.rotate(originalOrientation);
-				this.orientation = originalOrientation + rotation;
-				this.orientation = mod(this.orientation, Math.PI * 2);
-				this.position = originalPosition.copy().add(absoluteMovement);
+				const absoluteMovement = translation.rotate(originalOrientation);
+				this.transform.rotation = originalOrientation + rotation;
+				this.transform.rotation = mod(this.transform.rotation, Math.PI * 2);
+				this.transform.translation = originalPosition
+					.copy()
+					.add(absoluteMovement);
 				await sleep(1 / 60);
 			}
 		}
 
-		const errorFactor = 0.01;
-
-		const { movement, rotation } = calculateOdometry(
-			left + random([-left, left * 0.3]) * errorFactor,
-			right + random([-right, right * 0.3]) * errorFactor,
+		const { translation, rotation } = calculateOdometry(
+			left,
+			right,
 			this.wheelBase
 		);
-		const absoluteMovement = movement.rotate(originalOrientation);
-		this.orientation = originalOrientation + rotation;
-		this.orientation = mod(this.orientation, Math.PI * 2);
-		this.position = originalPosition.copy().add(absoluteMovement);
+		const absoluteMovement = translation.rotate(originalOrientation);
+		this.transform.rotation = originalOrientation + rotation;
+		this.transform.rotation = mod(this.transform.rotation, Math.PI * 2);
+		this.transform.translation = originalPosition.copy().add(absoluteMovement);
 	}
 }
 
@@ -163,15 +194,9 @@ export function calculateOdometry(
 	left: number,
 	right: number,
 	wheelBase: number
-): {
-	movement: Vec2;
-	rotation: number;
-} {
+): RotoTranslation {
 	if (left === right) {
-		return {
-			movement: new Vec2([0, left]),
-			rotation: 0,
-		};
+		return new RotoTranslation(0, new Vec2([0, left]));
 	}
 
 	// left / (r + wb/2) = right / (r - wb/2)
@@ -194,8 +219,5 @@ export function calculateOdometry(
 	const relativeX = -(Math.cos(angle) - 1) * radius;
 	const relativeY = Math.sin(angle) * -radius;
 	const movement = new Vec2([relativeX, relativeY]);
-	return {
-		movement,
-		rotation: angle,
-	};
+	return new RotoTranslation(angle, movement);
 }
