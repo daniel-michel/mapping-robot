@@ -84,6 +84,14 @@ export class Vec2 {
 	magnitudeSquared() {
 		return this.x * this.x + this.y * this.y;
 	}
+	/**
+	 * Counter-clockwise angle from the x-axis
+	 * (if the x-axis is pointing to the right and the y-axis is pointing up)
+	 */
+	heading() {
+		return Math.atan2(this.y, this.x);
+	}
+
 	rotate(angle: number) {
 		const cos = Math.cos(angle);
 		const sin = Math.sin(angle);
@@ -92,6 +100,10 @@ export class Vec2 {
 		this.x = x;
 		this.y = y;
 		return this;
+	}
+
+	toString() {
+		return `(${this.x}, ${this.y})`;
 	}
 
 	*[Symbol.iterator]() {
@@ -155,6 +167,9 @@ export class Vec2 {
 	}
 	static distance(a: Vec2Like, b: Vec2Like) {
 		return Vec2.sub(a, b).magnitude();
+	}
+	static distanceSquared(a: Vec2Like, b: Vec2Like) {
+		return Vec2.sub(a, b).magnitudeSquared();
 	}
 	static interpolate(a: Vec2Like, b: Vec2Like, t: number) {
 		return new Vec2([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);

@@ -5,8 +5,8 @@ import {
 	RayLineIntersectionResult,
 	Vec2,
 	Vec2Like,
-} from "./math/vec";
-import { createLcg } from "./pseudorandom";
+} from "./math/vec.ts";
+import { createLcg } from "./pseudorandom.ts";
 
 export class World {
 	walls: Line[];

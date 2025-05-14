@@ -1,4 +1,5 @@
 import { RotoTranslation } from "./math/roto-translation";
+import { clamp } from "./math/util.ts";
 import { Vec2 } from "./math/vec";
 import {
 	rotoTranslateCtx,
@@ -49,9 +50,8 @@ export class RobotController {
 	async run() {
 		this.slam.addScan(await this.robot.scan());
 
-		// await this.manualControl();
-
 		await this.driveAndScan(20, 18);
+		await this.manualControl();
 
 		// await this.driveAndScan(11, 10);
 		// await this.driveAndScan(11, 10);
@@ -145,6 +145,7 @@ export class RobotController {
 	}
 
 	render(ctx: CanvasRenderingContext2D, size: Vec2, t: number) {
+		this.slam.poseGraph.optimize(1);
 		const robotPose = this.slam.poseGraph.getNodeEstimate(this.slam.poseId);
 		interpolateCamera(this.camera, robotPose, t);
 		const saved = savedState(ctx);
@@ -184,7 +185,10 @@ export class RobotController {
 				const secondPose = this.slam.poseGraph.getNodeEstimate(
 					connection.nodes[1]
 				);
-				const color = `hsl(110, 100%, ${connection.strength * 80}%)`;
+				const color = `hsla(110, 100%, 60%, ${clamp(
+					1 - 0.3 / connection.strength,
+					[0.08, 1]
+				)})`;
 				ctx.beginPath();
 				ctx.moveTo(firstPose.translation.x, firstPose.translation.y);
 				ctx.lineTo(secondPose.translation.x, secondPose.translation.y);
@@ -207,8 +211,36 @@ export class RobotController {
 				for (const point of surface) {
 					ctx.beginPath();
 					ctx.arc(point.x, point.y, 1, 0, Math.PI * 2);
+					// ctx.arc(point.x, point.y, 3, 0, Math.PI * 2);
 					ctx.fillStyle = "#f545";
 					ctx.fill();
+				}
+			}
+
+			for (const correspondence of this.slam.correspondences.slice(-1)) {
+				const firstPose = this.slam.poseGraph.getNodeEstimate(
+					correspondence.poseA
+				);
+				const secondPose = this.slam.poseGraph.getNodeEstimate(
+					correspondence.poseB
+				);
+				const pairs = correspondence.pairs;
+				for (const [i, j] of pairs) {
+					const firstPoint = this.slam.scans.get(correspondence.poseA)?.scan
+						.points[i].point;
+					const secondPoint = this.slam.scans.get(correspondence.poseB)?.scan
+						.points[j].point;
+					if (!firstPoint || !secondPoint) {
+						continue;
+					}
+					const firstTransformed = firstPose.apply(firstPoint);
+					const secondTransformed = secondPose.apply(secondPoint);
+					ctx.beginPath();
+					ctx.moveTo(firstTransformed.x, firstTransformed.y);
+					ctx.lineTo(secondTransformed.x, secondTransformed.y);
+					ctx.strokeStyle = "#ff42";
+					ctx.lineWidth = 1;
+					ctx.stroke();
 				}
 			}
 		});

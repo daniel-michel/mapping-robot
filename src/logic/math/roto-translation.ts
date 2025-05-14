@@ -1,14 +1,14 @@
-import { Mat3 } from "./mat";
-import { angleDiff } from "./util";
-import { Vec2 } from "./vec";
+import { Mat3 } from "./mat.ts";
+import { angleDiff, interpolateAngle } from "./util.ts";
+import { Vec2, Vec2Like } from "./vec.ts";
 
 export class RotoTranslation {
 	rotation: number;
 	translation: Vec2;
 
-	constructor(rotation: number, translation: Vec2) {
+	constructor(rotation: number, translation: Vec2Like) {
 		this.rotation = rotation;
-		this.translation = translation;
+		this.translation = Vec2.wrapped(translation);
 	}
 
 	copy(): RotoTranslation {
@@ -81,5 +81,25 @@ export class RotoTranslation {
 			.sub(b.translation)
 			.rotate(-b.rotation);
 		return new RotoTranslation(rotation, translation);
+	}
+
+	static interpolate(
+		a: RotoTranslation,
+		b: RotoTranslation,
+		t: number
+	): RotoTranslation {
+		const translationMagnitude =
+			a.translation.magnitude() * (1 - t) + b.translation.magnitude() * t;
+		const translationAngle = interpolateAngle(
+			a.translation.heading(),
+			b.translation.heading(),
+			t
+		);
+		const translation =
+			Vec2.fromAngle(translationAngle).mul(translationMagnitude);
+		return new RotoTranslation(
+			interpolateAngle(a.rotation, b.rotation, t),
+			translation
+		);
 	}
 }

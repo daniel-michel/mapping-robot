@@ -49,7 +49,7 @@ export class Simulation {
 				saved(() => {
 					rotoTranslateCtx(ctx, this.robot.transform);
 					if (this.scan) {
-						for (let i = 0; i < this.scan.angleCount; i++) {
+						for (let i = 0; i < this.scan.count; i++) {
 							const point = this.scan.points[i];
 							const length = point.distance >= 0 ? point.distance : 10;
 							ctx.beginPath();
@@ -62,7 +62,7 @@ export class Simulation {
 							ctx.lineWidth = 1;
 							ctx.stroke();
 						}
-						for (let i = 0; i < this.scan.angleCount; i++) {
+						for (let i = 0; i < this.scan.count; i++) {
 							const point = this.scan.points[i];
 							const length = point.distance >= 0 ? point.distance : 10;
 							const hitPoint = new Vec2([0, 1])

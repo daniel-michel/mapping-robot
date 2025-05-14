@@ -30,6 +30,9 @@ export function interpolateAngle(
 		return interpolate(first, first + diff, interpolation);
 	}
 }
+export function angleNormalize(angle: number): number {
+	return mod(angle, Math.PI * 2);
+}
 export function angleDiffAbs(first: number, second: number): number {
 	const diff = mod(second - first, Math.PI * 2);
 	if (diff > Math.PI) {

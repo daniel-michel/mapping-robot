@@ -1,8 +1,8 @@
-import { RotoTranslation } from "./math/roto-translation";
-import { mod, random } from "./math/util";
-import { Ray, Vec2 } from "./math/vec";
-import { sleep } from "./util";
-import { World } from "./world";
+import { RotoTranslation } from "./math/roto-translation.ts";
+import { mod, random } from "./math/util.ts";
+import { Ray, Vec2 } from "./math/vec.ts";
+import { sleep } from "./util.ts";
+import { World } from "./world.ts";
 
 const DEG_TO_RAD = Math.PI / 180;
 
@@ -27,7 +27,7 @@ export type RangingSensorScan = {
 	/** The steps in angle between distance measurements */
 	angleStep: number;
 	/** Number of distance measurements */
-	angleCount: number;
+	count: number;
 	points: {
 		/** The angle of distance measurement relative to the center of the measurement region */
 		angle: number;
@@ -44,14 +44,14 @@ export class SimulationRobot implements Robot {
 	transform: RotoTranslation = new RotoTranslation(0, new Vec2([0, 0]));
 
 	rangingSensor: RangingSensorConfig = {
-		rotationAngle: 160 * DEG_TO_RAD,
+		rotationAngle: 350 * DEG_TO_RAD,
 		/** this is the targeted step size not actually used */
 		targetAngleStepSize: 2 * DEG_TO_RAD,
 		distanceRange: [2, 780],
-		// distanceAccuracy: 4,
-		distanceAccuracy: 0,
-		// angularAccuracy: 2.5 * DEG_TO_RAD,
-		angularAccuracy: 0,
+		distanceAccuracy: 4,
+		// distanceAccuracy: 0,
+		angularAccuracy: 2.5 * DEG_TO_RAD,
+		// angularAccuracy: 0,
 		refreshTime: 1 / 50,
 	};
 
@@ -110,7 +110,7 @@ export class SimulationRobot implements Robot {
 		return {
 			angle: this.rangingSensor.rotationAngle,
 			angleStep,
-			angleCount: stepCount,
+			count: stepCount,
 			points,
 		} satisfies RangingSensorScan;
 	}
@@ -141,8 +141,9 @@ export class SimulationRobot implements Robot {
 			this.positionHistory.shift();
 		}
 
+		const errorFactor = 0.2;
 		// const errorFactor = 0.05;
-		const errorFactor = 0;
+		// const errorFactor = 0;
 		const leftError = random([-1, 0.4]) * errorFactor * left;
 		const rightError = random([-1, 0.4]) * errorFactor * right;
 		left += leftError;
