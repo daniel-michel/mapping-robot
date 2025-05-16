@@ -8,7 +8,7 @@
 		"build": "tsc && vite build",
 		"check-watch": "tsc --noEmit --watch",
 		"preview": "vite preview",
-		"test": "deno test --coverage ; deno coverage ./coverage --lcov > lcov.info"
+		"test": "deno test --no-check --coverage ; deno coverage ./coverage --lcov > lcov.info"
 	},
 	"dependencies": {
 		"lit": "^3.2.1"

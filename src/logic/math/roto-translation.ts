@@ -1,5 +1,5 @@
 import { Mat3 } from "./mat.ts";
-import { angleDiff, interpolateAngle } from "./util.ts";
+import { angleDiff, angleNormalize } from "./util.ts";
 import { Vec2, Vec2Like } from "./vec.ts";
 
 export class RotoTranslation {
@@ -83,23 +83,33 @@ export class RotoTranslation {
 		return new RotoTranslation(rotation, translation);
 	}
 
+	mul(s: number) {
+		if (angleNormalize(this.rotation) === 0) {
+			this.translation.mul(s);
+			return this;
+		}
+
+		const translationMagnitude = this.translation.magnitude();
+		const translationAngle = this.translation.heading();
+		const refVec = new Vec2([0, 1]).rotate(this.rotation).sub([0, 1]);
+		const refDistance = refVec.magnitude();
+		const refAngle = angleDiff(refVec.heading(), Math.PI / 2);
+		const partialAngle = angleDiff(this.rotation, 0) * s;
+		const radius = -translationMagnitude / refDistance;
+
+		const relativeX = -(Math.cos(partialAngle) - 1) * radius;
+		const relativeY = Math.sin(partialAngle) * -radius;
+		const relative = new Vec2([relativeX, relativeY]);
+		this.translation = relative.rotate(-refAngle + translationAngle);
+		this.rotation *= s;
+		return this;
+	}
+
 	static interpolate(
 		a: RotoTranslation,
 		b: RotoTranslation,
 		t: number
 	): RotoTranslation {
-		const translationMagnitude =
-			a.translation.magnitude() * (1 - t) + b.translation.magnitude() * t;
-		const translationAngle = interpolateAngle(
-			a.translation.heading(),
-			b.translation.heading(),
-			t
-		);
-		const translation =
-			Vec2.fromAngle(translationAngle).mul(translationMagnitude);
-		return new RotoTranslation(
-			interpolateAngle(a.rotation, b.rotation, t),
-			translation
-		);
+		return RotoTranslation.combine(a, RotoTranslation.relative(b, a).mul(t));
 	}
 }
