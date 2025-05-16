@@ -10,7 +10,7 @@ Deno.test({
 			"roto-translation for point correspondences 0.2",
 			async (t) => {
 				const points = [new Vec2([0, 0]), new Vec2([1, 0]), new Vec2([0, 1])];
-				const transform = new RotoTranslation(Math.PI * 0.2, new Vec2([1, 5]));
+				const transform = new RotoTranslation(Math.PI * 0.2, [1, 5]);
 				const transformedPoints = points.map((p) => transform.apply(p));
 				const determinedTransform = computeRotoTranslation(
 					points,
@@ -27,7 +27,7 @@ Deno.test({
 			"roto-translation for point correspondences 0.4",
 			async (t) => {
 				const points = [new Vec2([0, 0]), new Vec2([1, 0]), new Vec2([0, 1])];
-				const transform = new RotoTranslation(Math.PI * 0.4, new Vec2([1, 5]));
+				const transform = new RotoTranslation(Math.PI * 0.4, [1, 5]);
 				const transformedPoints = points.map((p) => transform.apply(p));
 				const determinedTransform = computeRotoTranslation(
 					points,
@@ -44,7 +44,7 @@ Deno.test({
 			"roto-translation for point correspondences 0.6",
 			async (t) => {
 				const points = [new Vec2([0, 0]), new Vec2([1, 0]), new Vec2([0, 1])];
-				const transform = new RotoTranslation(Math.PI * 0.6, new Vec2([1, 5]));
+				const transform = new RotoTranslation(Math.PI * 0.6, [1, 5]);
 				const transformedPoints = points.map((p) => transform.apply(p));
 				const determinedTransform = computeRotoTranslation(
 					points,
@@ -61,7 +61,7 @@ Deno.test({
 			"roto-translation for point correspondences 0.8",
 			async (t) => {
 				const points = [new Vec2([0, 0]), new Vec2([1, 0]), new Vec2([0, 1])];
-				const transform = new RotoTranslation(Math.PI * 0.8, new Vec2([1, 5]));
+				const transform = new RotoTranslation(Math.PI * 0.8, [1, 5]);
 				const transformedPoints = points.map((p) => transform.apply(p));
 				const determinedTransform = computeRotoTranslation(
 					points,
@@ -76,7 +76,7 @@ Deno.test({
 		);
 		await t.step("roto-translation for point correspondences 1", async (t) => {
 			const points = [new Vec2([0, 0]), new Vec2([1, 0]), new Vec2([0, 1])];
-			const transform = new RotoTranslation(Math.PI * 1, new Vec2([1, 5]));
+			const transform = new RotoTranslation(Math.PI * 1, [1, 5]);
 			const transformedPoints = points.map((p) => transform.apply(p));
 			const determinedTransform = computeRotoTranslation(
 				points,
@@ -92,7 +92,7 @@ Deno.test({
 			"roto-translation for point correspondences 1.5",
 			async (t) => {
 				const points = [new Vec2([0, 0]), new Vec2([1, 0]), new Vec2([0, 1])];
-				const transform = new RotoTranslation(Math.PI * 1.5, new Vec2([1, 5]));
+				const transform = new RotoTranslation(Math.PI * 1.5, [1, 5]);
 				const transformedPoints = points.map((p) => transform.apply(p));
 				const determinedTransform = computeRotoTranslation(
 					points,
@@ -107,7 +107,7 @@ Deno.test({
 		);
 		await t.step("roto-translation for point correspondences 2", async (t) => {
 			const points = [new Vec2([0, 0]), new Vec2([1, 0]), new Vec2([0, 1])];
-			const transform = new RotoTranslation(Math.PI * 2, new Vec2([1, 5]));
+			const transform = new RotoTranslation(Math.PI * 2, [1, 5]);
 			const transformedPoints = points.map((p) => transform.apply(p));
 			const determinedTransform = computeRotoTranslation(
 				points,

@@ -17,12 +17,12 @@ export class RobotController {
 	slam: Slam = new Slam();
 
 	odometrySinceLastScan = {
-		rotoTranslation: new RotoTranslation(0, new Vec2([0, 0])),
+		rotoTranslation: new RotoTranslation(0, [0, 0]),
 		totalWheelRotation: 0,
 	};
 
 	camera: Camera = {
-		transform: new RotoTranslation(0, new Vec2([0, 0])),
+		transform: new RotoTranslation(0, [0, 0]),
 		scale: 1,
 	};
 
@@ -131,10 +131,7 @@ export class RobotController {
 
 	async scan() {
 		this.slam.move(this.odometrySinceLastScan.rotoTranslation);
-		this.odometrySinceLastScan.rotoTranslation = new RotoTranslation(
-			0,
-			new Vec2([0, 0])
-		);
+		this.odometrySinceLastScan.rotoTranslation = new RotoTranslation(0, [0, 0]);
 		this.odometrySinceLastScan.totalWheelRotation = 0;
 		const scan = await this.robot.scan();
 		this.slam.addScan(scan);

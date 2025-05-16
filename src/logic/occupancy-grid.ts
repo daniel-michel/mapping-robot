@@ -22,7 +22,7 @@ export function generateOccupancyGrid(
 	const probabilityGrid = new Grid<occupancyProb>(2);
 	for (const { scan, transform } of scans) {
 		const scanOrigin = transform.apply(new Vec2([0, 0])).freeze();
-		for (const { angle, point, distance } of scan.points) {
+		for (const { point } of scan.points) {
 			if (!point) {
 				continue;
 			}
@@ -32,14 +32,14 @@ export function generateOccupancyGrid(
 				scanOrigin.copy().div(resolution)
 			).forEach((point, i) => {
 				const value = i === 0 ? 1 : 0;
-				const gridValue = probabilityGrid.get(...point) ?? {
+				const gridValue = probabilityGrid.get(point.vec) ?? {
 					prob: 0,
 					count: 0,
 				};
 				gridValue.count += 1;
 				gridValue.prob =
 					(gridValue.prob * (gridValue.count - 1) + value) / gridValue.count;
-				probabilityGrid.set(gridValue, ...point);
+				probabilityGrid.set(gridValue, point.vec);
 			});
 		}
 	}

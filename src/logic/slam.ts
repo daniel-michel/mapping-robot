@@ -29,7 +29,7 @@ export class PoseGraph {
 	getNodeEstimate(node: number) {
 		const estimate = this.nodeEstimates.get(node);
 		if (!estimate) {
-			return new RotoTranslation(0, new Vec2([0, 0]));
+			return new RotoTranslation(0, [0, 0]);
 		}
 		return estimate;
 	}
@@ -95,11 +95,11 @@ export class PoseGraph {
 		if (locations.length < 1) {
 			const estimate = this.nodeEstimates.get(node);
 			if (!estimate) {
-				this.nodeEstimates.set(node, new RotoTranslation(0, new Vec2([0, 0])));
+				this.nodeEstimates.set(node, new RotoTranslation(0, [0, 0]));
 			}
 			return;
 		}
-		let transform = new RotoTranslation(0, new Vec2([0, 0]));
+		let transform = new RotoTranslation(0, [0, 0]);
 		let strength = 0;
 		for (const loc of locations) {
 			strength += loc.strength;
@@ -138,7 +138,6 @@ export class Slam {
 		const constraint: Constraint = {
 			nodes: [this.poseId, newPoseId],
 			transform: rotoTranslation.copy(),
-			// transform: new RotoTranslation(0, new Vec2([0, 0])),
 			strength: 0.1,
 		};
 		this.poseGraph.addConstraint(constraint);

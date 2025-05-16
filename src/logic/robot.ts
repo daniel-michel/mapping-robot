@@ -41,7 +41,7 @@ export class SimulationRobot implements Robot {
 	world: World;
 	wheelBase: number;
 	wheelRadius: number;
-	transform: RotoTranslation = new RotoTranslation(0, new Vec2([0, 0]));
+	transform: RotoTranslation = new RotoTranslation(0, [0, 0]);
 
 	rangingSensor: RangingSensorConfig = {
 		rotationAngle: 360 * DEG_TO_RAD,
@@ -197,7 +197,7 @@ export function calculateOdometry(
 	wheelBase: number
 ): RotoTranslation {
 	if (left === right) {
-		return new RotoTranslation(0, new Vec2([0, left]));
+		return new RotoTranslation(0, [0, left]);
 	}
 
 	// left / (r + wb/2) = right / (r - wb/2)
@@ -219,6 +219,5 @@ export function calculateOdometry(
 			: -left / (radius + wheelBase * 0.5);
 	const relativeX = -(Math.cos(angle) - 1) * radius;
 	const relativeY = Math.sin(angle) * -radius;
-	const movement = new Vec2([relativeX, relativeY]);
-	return new RotoTranslation(angle, movement);
+	return new RotoTranslation(angle, [relativeX, relativeY]);
 }

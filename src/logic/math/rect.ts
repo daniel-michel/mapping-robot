@@ -1,12 +1,12 @@
-import { Vec2 } from "./vec";
+import { Vec2, Vec2Like } from "./vec";
 
 export class Rect {
 	#center: Vec2;
 	#halfSize: Vec2;
 
-	constructor(center: Vec2, halfSize: Vec2) {
-		this.#center = center;
-		this.#halfSize = halfSize;
+	constructor(center: Vec2Like, halfSize: Vec2Like) {
+		this.#center = Vec2.wrapped(center);
+		this.#halfSize = Vec2.wrapped(halfSize);
 	}
 	get center() {
 		return this.#center;
@@ -105,10 +105,11 @@ export class Rect {
 			top === -Infinity ||
 			bottom === Infinity
 		) {
-			return new Rect(new Vec2([0, 0]), new Vec2([0, 0]));
+			return new Rect([0, 0], [0, 0]);
 		}
-		const center = new Vec2([(left + right) / 2, (top + bottom) / 2]);
-		const halfSize = new Vec2([(right - left) / 2, (top - bottom) / 2]);
-		return new Rect(center, halfSize);
+		return new Rect(
+			[(left + right) / 2, (top + bottom) / 2],
+			[(right - left) / 2, (top - bottom) / 2]
+		);
 	}
 }
