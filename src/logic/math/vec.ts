@@ -41,6 +41,7 @@ export class Vec2 {
 	}
 
 	freeze() {
+		Object.freeze(this.vec);
 		return Object.freeze(this);
 	}
 

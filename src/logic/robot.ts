@@ -44,7 +44,7 @@ export class SimulationRobot implements Robot {
 	transform: RotoTranslation = new RotoTranslation(0, new Vec2([0, 0]));
 
 	rangingSensor: RangingSensorConfig = {
-		rotationAngle: 350 * DEG_TO_RAD,
+		rotationAngle: 360 * DEG_TO_RAD,
 		/** this is the targeted step size not actually used */
 		targetAngleStepSize: 2 * DEG_TO_RAD,
 		distanceRange: [2, 780],

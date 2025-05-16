@@ -11,6 +11,89 @@ import { angleDiff, angleNormalize } from "./math/util.ts";
 import { Vec2 } from "./math/vec.ts";
 import { RangingSensorScan } from "./robot.ts";
 
+if ("postMessage" in self) {
+	self.addEventListener("message", (e: MessageEvent) => {
+		switch (e.data.action) {
+			case "scanMatching": {
+				const result = scanMatching(
+					{
+						...e.data.scanA,
+						points: e.data.scanA.points.map((point) => ({
+							...point,
+							point: point.point && new Vec2(point.point),
+						})),
+					},
+					{
+						...e.data.scanB,
+						points: e.data.scanB.points.map((point) => ({
+							...point,
+							point: point.point && new Vec2(point.point),
+						})),
+					},
+					new RotoTranslation(
+						...(e.data.initialTransform as [number, [number, number]])
+					)
+				);
+				self.postMessage({
+					transform: [
+						result.transform.rotation,
+						[...result.transform.translation],
+					],
+					converged: result.converged,
+				});
+				break;
+			}
+		}
+	});
+}
+
+export function asyncScanMatching(
+	scanA: RangingSensorScan,
+	scanB: RangingSensorScan,
+	initialTransform: RotoTranslation
+) {
+	return new Promise<{ transform: RotoTranslation; converged: boolean }>(
+		(resolve) => {
+			const worker = new Worker(
+				new URL("./scan-matching.js", import.meta.url),
+				{
+					type: "module",
+				}
+			);
+			worker.addEventListener("message", (e) => {
+				worker.terminate();
+				resolve({
+					transform: new RotoTranslation(
+						...(e.data.transform as [number, [number, number]])
+					),
+					converged: e.data.converged,
+				});
+			});
+			worker.postMessage({
+				action: "scanMatching",
+				scanA: {
+					...scanA,
+					points: scanA.points.map((point) => ({
+						...point,
+						point: point.point && [...point.point],
+					})),
+				},
+				scanB: {
+					...scanB,
+					points: scanB.points.map((point) => ({
+						...point,
+						point: point.point && [...point.point],
+					})),
+				},
+				initialTransform: [
+					initialTransform.rotation,
+					[...initialTransform.translation],
+				],
+			});
+		}
+	);
+}
+
 export function scanMatching(
 	scanA: RangingSensorScan,
 	scanB: RangingSensorScan,

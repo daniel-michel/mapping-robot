@@ -2,7 +2,7 @@ import { RotoTranslation } from "./math/roto-translation.ts";
 import { interpolateAngle } from "./math/util.ts";
 import { Vec2 } from "./math/vec.ts";
 import { RangingSensorScan } from "./robot.ts";
-import { correspondenceMatch, scanMatching } from "./scan-matching.ts";
+import { asyncScanMatching } from "./scan-matching.ts";
 
 export type Constraint = {
 	nodes: [number, number];
@@ -53,7 +53,6 @@ export class PoseGraph {
 	}
 
 	optimize(iterations: number) {
-		// const averageBefore = this.#averageTransform();
 		for (let i = 0; i < iterations; i++) {
 			const visited = new Set<number>();
 			const visit = (node: number) => {
@@ -76,14 +75,6 @@ export class PoseGraph {
 				visit(first);
 			}
 		}
-		// TODO: the average appears to be moving, this will prevent the estimates from setting
-
-		// const averageAfter = this.#averageTransform();
-		// const diff = RotoTranslation.relative(
-		// 	averageAfter.transform,
-		// 	averageBefore.transform
-		// );
-		// console.log((diff.rotation / Math.PI) * 180, diff.translation.toString());
 	}
 
 	#addConstraintToNode(node: number, constraint: Constraint) {
@@ -122,22 +113,10 @@ export class PoseGraph {
 			}
 			return;
 		}
-		// let orientation = 0;
-		// let position = new Vec2([0, 0]);
 		let transform = new RotoTranslation(0, new Vec2([0, 0]));
 		let strength = 0;
 		for (const loc of locations) {
 			strength += loc.strength;
-			// orientation = interpolateAngle(
-			// 	orientation,
-			// 	loc.transform.rotation,
-			// 	loc.strength / strength
-			// );
-			// position = Vec2.interpolate(
-			// 	position,
-			// 	loc.transform.translation,
-			// 	loc.strength / strength
-			// );
 			transform = RotoTranslation.interpolate(
 				transform,
 				loc.transform,
@@ -153,8 +132,7 @@ export type Surface = Vec2[];
 export class Slam {
 	poseGraph = new PoseGraph();
 
-	// #surfaceThreshold = 20;
-	#surfaceThreshold = 50;
+	#surfaceThreshold = 20;
 
 	scans: Map<number, { scan: RangingSensorScan; surfaces: Surface[] }> =
 		new Map();
@@ -221,15 +199,12 @@ export class Slam {
 			.toArray()
 			.sort((a, b) => a.s - b.s);
 		const best = sorted.slice(0, 2);
-		console.log(best);
 		for (const { id } of best) {
 			this.matchScans(id, this.poseId);
 		}
-		// console.log(sorted.slice(0, 3));
-		// setTimeout(this.matchScans.bind(this), 1000, this.poseId - 1, this.poseId);
 	}
 
-	matchScans(firstPoseId: number, secondPoseId: number) {
+	async matchScans(firstPoseId: number, secondPoseId: number) {
 		const firstScan = this.scans.get(firstPoseId)?.scan;
 		const secondScan = this.scans.get(secondPoseId)?.scan;
 		if (!firstScan || !secondScan) {
@@ -238,7 +213,7 @@ export class Slam {
 		const firstPose = this.poseGraph.getNodeEstimate(firstPoseId);
 		const secondPose = this.poseGraph.getNodeEstimate(secondPoseId);
 		const reverseTransform = RotoTranslation.relative(secondPose, firstPose);
-		const { transform: improvedTransform, converged } = scanMatching(
+		const { transform: improvedTransform, converged } = await asyncScanMatching(
 			firstScan,
 			secondScan,
 			reverseTransform
