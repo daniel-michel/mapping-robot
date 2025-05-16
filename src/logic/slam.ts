@@ -1,6 +1,7 @@
+import { Grid } from "./grid.ts";
 import { RotoTranslation } from "./math/roto-translation.ts";
-import { interpolateAngle } from "./math/util.ts";
 import { Vec2 } from "./math/vec.ts";
+import { generateOccupancyGrid, OccupancyGrid } from "./occupancy-grid.ts";
 import { RangingSensorScan } from "./robot.ts";
 import { asyncScanMatching } from "./scan-matching.ts";
 
@@ -35,21 +36,6 @@ export class PoseGraph {
 	getNodeEstimateMat(node: number) {
 		const estimate = this.getNodeEstimate(node);
 		return estimate.matrix();
-	}
-
-	#averageTransform() {
-		return this.nodeEstimates.values().reduce(
-			(acc, estimate) => {
-				const strength = acc.strength + 1;
-				const transform = RotoTranslation.interpolate(
-					acc.transform,
-					estimate,
-					1 / strength
-				);
-				return { transform, strength };
-			},
-			{ transform: new RotoTranslation(0, new Vec2([0, 0])), strength: 0 }
-		);
 	}
 
 	optimize(iterations: number) {
@@ -138,6 +124,9 @@ export class Slam {
 		new Map();
 	poseId = 0;
 
+	occupancyGridResolution = 10;
+	occupancyGrid: OccupancyGrid = new Grid(2);
+
 	correspondences: {
 		poseA: number;
 		poseB: number;
@@ -204,6 +193,20 @@ export class Slam {
 		}
 	}
 
+	updateOccupancyGrid() {
+		const scans = this.scans.entries().map(([poseId, { scan }]) => {
+			const transform = this.poseGraph.getNodeEstimate(poseId);
+			return {
+				scan,
+				transform,
+			};
+		});
+		this.occupancyGrid = generateOccupancyGrid(
+			scans.toArray(),
+			this.occupancyGridResolution
+		);
+	}
+
 	async matchScans(firstPoseId: number, secondPoseId: number) {
 		const firstScan = this.scans.get(firstPoseId)?.scan;
 		const secondScan = this.scans.get(secondPoseId)?.scan;
@@ -223,31 +226,31 @@ export class Slam {
 			transform: improvedTransform,
 			strength: converged ? 0.5 : 0.1,
 		});
-		this.poseGraph.optimize(5);
+		// this.poseGraph.optimize(5);
 
-		const correspondences = correspondenceMatch(
-			firstScan,
-			secondScan,
-			RotoTranslation.relative(
-				this.poseGraph.getNodeEstimate(secondPoseId),
-				this.poseGraph.getNodeEstimate(firstPoseId)
-			)
-		).toArray();
-		const pairs = correspondences
-			.map((i, j) => {
-				const a = i !== null ? firstScan.points[i].point : null;
-				const b = secondScan.points[j].point;
-				if (!a || !b) {
-					return null;
-				}
-				return [i, j] as const;
-			})
-			.filter((i) => i !== null);
-		this.correspondences.push({
-			poseA: firstPoseId,
-			poseB: secondPoseId,
-			pairs: pairs as [number, number][],
-		});
+		// const correspondences = correspondenceMatch(
+		// 	firstScan,
+		// 	secondScan,
+		// 	RotoTranslation.relative(
+		// 		this.poseGraph.getNodeEstimate(secondPoseId),
+		// 		this.poseGraph.getNodeEstimate(firstPoseId)
+		// 	)
+		// ).toArray();
+		// const pairs = correspondences
+		// 	.map((i, j) => {
+		// 		const a = i !== null ? firstScan.points[i].point : null;
+		// 		const b = secondScan.points[j].point;
+		// 		if (!a || !b) {
+		// 			return null;
+		// 		}
+		// 		return [i, j] as const;
+		// 	})
+		// 	.filter((i) => i !== null);
+		// this.correspondences.push({
+		// 	poseA: firstPoseId,
+		// 	poseB: secondPoseId,
+		// 	pairs: pairs as [number, number][],
+		// });
 	}
 
 	getAbsoluteSurfaces() {

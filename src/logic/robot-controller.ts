@@ -1,6 +1,7 @@
 import { RotoTranslation } from "./math/roto-translation";
 import { clamp } from "./math/util.ts";
 import { Vec2 } from "./math/vec";
+import { OccupancyGrid } from "./occupancy-grid.ts";
 import {
 	rotoTranslateCtx,
 	Camera,
@@ -154,30 +155,6 @@ export class RobotController {
 			ctx.scale(this.camera.scale, -this.camera.scale);
 			rotoTranslateCtx(ctx, this.camera.transform.inverse());
 
-			const poseIds = this.slam.poseGraph.nodeEstimates.keys().toArray();
-			if (poseIds.length === 0) {
-				poseIds.push(0);
-			}
-			for (const poseId of poseIds) {
-				const pose = this.slam.poseGraph.getNodeEstimate(poseId);
-				saved(() => {
-					rotoTranslateCtx(ctx, pose);
-					const wheelWidth = 1;
-					ctx.fillStyle = poseId === this.slam.poseId ? "#aaa" : "#ff27";
-					ctx.fillRect(
-						-0.5 * this.robot.wheelBase - wheelWidth,
-						-this.robot.wheelRadius,
-						wheelWidth,
-						2 * this.robot.wheelRadius
-					);
-					ctx.fillRect(
-						0.5 * this.robot.wheelBase,
-						-this.robot.wheelRadius,
-						wheelWidth,
-						2 * this.robot.wheelRadius
-					);
-				});
-			}
 			for (const connection of this.slam.poseGraph.constraints) {
 				const firstPose = this.slam.poseGraph.getNodeEstimate(
 					connection.nodes[0]
@@ -243,6 +220,91 @@ export class RobotController {
 					ctx.stroke();
 				}
 			}
+
+			saved(() => {
+				ctx.scale(
+					this.slam.occupancyGridResolution,
+					this.slam.occupancyGridResolution
+				);
+				renderOccupancyGrid(ctx, this.slam.occupancyGrid);
+			});
+
+			const poseIds = this.slam.poseGraph.nodeEstimates.keys().toArray();
+			if (poseIds.length === 0) {
+				poseIds.push(0);
+			}
+			for (const poseId of poseIds) {
+				const pose = this.slam.poseGraph.getNodeEstimate(poseId);
+				saved(() => {
+					rotoTranslateCtx(ctx, pose);
+					const wheelWidth = 1;
+					ctx.fillStyle = poseId === this.slam.poseId ? "#aaa" : "#ff27";
+					ctx.fillRect(
+						-0.5 * this.robot.wheelBase - wheelWidth,
+						-this.robot.wheelRadius,
+						wheelWidth,
+						2 * this.robot.wheelRadius
+					);
+					ctx.fillRect(
+						0.5 * this.robot.wheelBase,
+						-this.robot.wheelRadius,
+						wheelWidth,
+						2 * this.robot.wheelRadius
+					);
+				});
+			}
 		});
 	}
+}
+
+function renderOccupancyGrid(
+	ctx: CanvasRenderingContext2D,
+	grid: OccupancyGrid,
+	depth = 0
+) {
+	if (depth > 10) {
+		return;
+	}
+	const saved = savedState(ctx);
+	const children = grid.children;
+	saved(() => {
+		const scaleFactor = 3 ** grid.level;
+		ctx.scale(scaleFactor, scaleFactor);
+		if (children.leaf) {
+			const value = children.value;
+			if (value !== undefined) {
+				// ctx.fillStyle = `hsl(${120 - value.prob * 120}, 30%, 10%)`;
+				// ctx.fillStyle = `hsl(${value === 1 ? 0 : 120}, 30%, 10%)`;
+				ctx.fillStyle =
+					value === 1 ? "hsla(0, 0%, 100%, 0.5)" : "hsla(230, 100%, 65%, 0.2)";
+				const margin = 0.2 / scaleFactor;
+				ctx.fillRect(
+					-0.5 + margin,
+					-0.5 + margin,
+					1 - margin * 2,
+					1 - margin * 2
+				);
+			}
+		} else {
+			if (grid.level > 0) {
+				ctx.strokeStyle = "#04a8";
+				ctx.lineWidth =
+					((0.1 / scaleFactor) * Math.log2(grid.level / 10 + 2)) / Math.log2(2);
+				ctx.strokeRect(-0.5, -0.5, 1, 1);
+			}
+			for (let i = 0; i < children.nodes.length; i++) {
+				const child = children.nodes[i];
+				if (child) {
+					saved(() => {
+						ctx.translate(
+							((i % 3) * 1) / 3 - 1 / 3,
+							(Math.floor(i / 3) * 1) / 3 - 1 / 3
+						);
+						ctx.scale(1 / scaleFactor, 1 / scaleFactor);
+						renderOccupancyGrid(ctx, child, depth + 1);
+					});
+				}
+			}
+		}
+	});
 }

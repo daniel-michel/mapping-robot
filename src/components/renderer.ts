@@ -24,7 +24,12 @@ export class SimulationRenderer extends LitElement {
 	}
 
 	render() {
-		return html`<canvas id="canvas" ${ref(this.#canvasRef)}></canvas>`;
+		return html`<canvas id="canvas" ${ref(this.#canvasRef)}></canvas>
+			<div class="buttons">
+				<button @click=${() => this.robotController.slam.updateOccupancyGrid()}>
+					Update Occupancy Grid
+				</button>
+			</div>`;
 	}
 
 	connectedCallback(): void {
@@ -136,6 +141,13 @@ export class SimulationRenderer extends LitElement {
 			width: 100%;
 			height: 100%;
 			background-color: #000;
+		}
+
+		.buttons {
+			position: absolute;
+			bottom: 0;
+			left: 0;
+			margin: 0.3em;
 		}
 	`;
 }
