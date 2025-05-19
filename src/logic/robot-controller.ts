@@ -1,7 +1,7 @@
 import { RotoTranslation } from "./math/roto-translation";
 import { clamp } from "./math/util.ts";
 import { Vec2 } from "./math/vec";
-import { OccupancyGrid } from "./occupancy-grid.ts";
+import { OccupancyProbGrid } from "./slam/occupancy-grid.ts";
 import {
 	rotoTranslateCtx,
 	Camera,
@@ -9,14 +9,14 @@ import {
 	savedState,
 } from "./rendering";
 import { calculateOdometry, Robot } from "./robot";
-import { Slam } from "./slam";
+import { Slam } from "./slam/slam.ts";
 import { sleep } from "./util";
 
 export class RobotController {
 	robot: Robot;
 	slam: Slam = new Slam();
 
-	odometrySinceLastScan = {
+	odometrySinceLastRecord = {
 		rotoTranslation: new RotoTranslation(0, [0, 0]),
 		totalWheelRotation: 0,
 	};
@@ -51,7 +51,7 @@ export class RobotController {
 	async run() {
 		this.slam.addScan(await this.robot.scan());
 
-		await this.driveAndScan(20, 18);
+		// await this.driveAndScan(20, 18);
 		await this.manualControl();
 
 		// await this.driveAndScan(11, 10);
@@ -94,8 +94,8 @@ export class RobotController {
 					// Math.abs(longitudinal) + 0.1
 					1000000
 				);
-			let left = longitudinal * 1.5 + lateral;
-			let right = longitudinal * 1.5 - lateral;
+			let left = longitudinal * 0.5 + lateral * 0.3;
+			let right = longitudinal * 0.5 - lateral * 0.3;
 			const max = Math.max(Math.abs(left), Math.abs(right));
 			const limit = 100;
 			if (max > limit) {
@@ -106,7 +106,8 @@ export class RobotController {
 			await Promise.all([this.drive(left, right), sleep(t)]);
 
 			if (
-				this.odometrySinceLastScan.totalWheelRotation * this.robot.wheelRadius >
+				this.odometrySinceLastRecord.totalWheelRotation *
+					this.robot.wheelRadius >
 				100
 			) {
 				await this.scan();
@@ -121,18 +122,21 @@ export class RobotController {
 			this.robot.wheelBase
 		);
 		await this.robot.driveAng(left, right);
-		this.odometrySinceLastScan.rotoTranslation = RotoTranslation.combine(
-			this.odometrySinceLastScan.rotoTranslation,
+		this.odometrySinceLastRecord.rotoTranslation = RotoTranslation.combine(
+			this.odometrySinceLastRecord.rotoTranslation,
 			odometry
 		);
-		this.odometrySinceLastScan.totalWheelRotation +=
+		this.odometrySinceLastRecord.totalWheelRotation +=
 			Math.abs(left) + Math.abs(right);
 	}
 
 	async scan() {
-		this.slam.move(this.odometrySinceLastScan.rotoTranslation);
-		this.odometrySinceLastScan.rotoTranslation = new RotoTranslation(0, [0, 0]);
-		this.odometrySinceLastScan.totalWheelRotation = 0;
+		this.slam.move(this.odometrySinceLastRecord.rotoTranslation);
+		this.odometrySinceLastRecord.rotoTranslation = new RotoTranslation(
+			0,
+			[0, 0]
+		);
+		this.odometrySinceLastRecord.totalWheelRotation = 0;
 		const scan = await this.robot.scan();
 		this.slam.addScan(scan);
 	}
@@ -140,12 +144,19 @@ export class RobotController {
 	async driveAndScan(left: number, right: number) {
 		await this.drive(left, right);
 		await this.scan();
+		await sleep(500);
+	}
+
+	getCurrentRobotPose() {
+		return RotoTranslation.combine(
+			this.slam.poseGraph.getNodeEstimate(this.slam.poseId),
+			this.odometrySinceLastRecord.rotoTranslation
+		);
 	}
 
 	render(ctx: CanvasRenderingContext2D, size: Vec2, t: number) {
 		this.slam.poseGraph.optimize(1);
-		const robotPose = this.slam.poseGraph.getNodeEstimate(this.slam.poseId);
-		interpolateCamera(this.camera, robotPose, t);
+		interpolateCamera(this.camera, this.getCurrentRobotPose(), t);
 		const saved = savedState(ctx);
 		saved(() => {
 			ctx.translate(size.x / 2, size.y / 2);
@@ -234,29 +245,37 @@ export class RobotController {
 				const pose = this.slam.poseGraph.getNodeEstimate(poseId);
 				saved(() => {
 					rotoTranslateCtx(ctx, pose);
-					const wheelWidth = 1;
-					ctx.fillStyle = poseId === this.slam.poseId ? "#aaa" : "#ff27";
-					ctx.fillRect(
-						-0.5 * this.robot.wheelBase - wheelWidth,
-						-this.robot.wheelRadius,
-						wheelWidth,
-						2 * this.robot.wheelRadius
-					);
-					ctx.fillRect(
-						0.5 * this.robot.wheelBase,
-						-this.robot.wheelRadius,
-						wheelWidth,
-						2 * this.robot.wheelRadius
-					);
+					ctx.fillStyle = poseId === this.slam.poseId ? "#f827" : "#ff27";
+					this.renderRobot(ctx);
 				});
 			}
+			saved(() => {
+				rotoTranslateCtx(ctx, this.getCurrentRobotPose());
+				ctx.fillStyle = "#aaa";
+				this.renderRobot(ctx);
+			});
 		});
+	}
+	renderRobot(ctx: CanvasRenderingContext2D) {
+		const wheelWidth = 1;
+		ctx.fillRect(
+			-0.5 * this.robot.wheelBase - wheelWidth,
+			-this.robot.wheelRadius,
+			wheelWidth,
+			2 * this.robot.wheelRadius
+		);
+		ctx.fillRect(
+			0.5 * this.robot.wheelBase,
+			-this.robot.wheelRadius,
+			wheelWidth,
+			2 * this.robot.wheelRadius
+		);
 	}
 }
 
 function renderOccupancyGrid(
 	ctx: CanvasRenderingContext2D,
-	grid: OccupancyGrid,
+	grid: OccupancyProbGrid,
 	depth = 0
 ) {
 	if (depth > 10) {
@@ -270,10 +289,12 @@ function renderOccupancyGrid(
 		if (children.leaf) {
 			const value = children.value;
 			if (value !== undefined) {
-				// ctx.fillStyle = `hsl(${120 - value.prob * 120}, 30%, 10%)`;
+				ctx.fillStyle = `hsla(${120 - value.prob * 120}, 100%, 70%, ${
+					(1 - 1 / (1 + value.weight * 0.5)) * 0.3
+				})`;
 				// ctx.fillStyle = `hsl(${value === 1 ? 0 : 120}, 30%, 10%)`;
-				ctx.fillStyle =
-					value === 1 ? "hsla(0, 0%, 100%, 0.5)" : "hsla(230, 100%, 65%, 0.2)";
+				// ctx.fillStyle =
+				// 	value === 1 ? "hsla(0, 0%, 100%, 0.5)" : "hsla(230, 100%, 65%, 0.2)";
 				const margin = 0.2 / scaleFactor;
 				ctx.fillRect(
 					-0.5 + margin,
@@ -283,12 +304,12 @@ function renderOccupancyGrid(
 				);
 			}
 		} else {
-			if (grid.level > 0) {
-				ctx.strokeStyle = "#04a8";
-				ctx.lineWidth =
-					((0.1 / scaleFactor) * Math.log2(grid.level / 10 + 2)) / Math.log2(2);
-				ctx.strokeRect(-0.5, -0.5, 1, 1);
-			}
+			// if (grid.level > 0) {
+			// 	ctx.strokeStyle = "#04a2";
+			// 	ctx.lineWidth =
+			// 		((0.1 / scaleFactor) * Math.log2(grid.level / 10 + 2)) / Math.log2(2);
+			// 	ctx.strokeRect(-0.5, -0.5, 1, 1);
+			// }
 			for (let i = 0; i < children.nodes.length; i++) {
 				const child = children.nodes[i];
 				if (child) {

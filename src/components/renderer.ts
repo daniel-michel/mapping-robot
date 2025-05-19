@@ -16,6 +16,8 @@ export class SimulationRenderer extends LitElement {
 	robotController = new RobotController(this.simulation.robot);
 	frameCount = 0;
 
+	scaleLevel = 0;
+
 	constructor() {
 		super();
 		setTimeout(() => {
@@ -24,7 +26,11 @@ export class SimulationRenderer extends LitElement {
 	}
 
 	render() {
-		return html`<canvas id="canvas" ${ref(this.#canvasRef)}></canvas>
+		return html`<canvas
+				id="canvas"
+				${ref(this.#canvasRef)}
+				@wheel=${this.#onWheel}
+			></canvas>
 			<div class="buttons">
 				<button @click=${() => this.robotController.slam.updateOccupancyGrid()}>
 					Update Occupancy Grid
@@ -49,6 +55,18 @@ export class SimulationRenderer extends LitElement {
 		}
 	}
 
+	#onWheel(event: WheelEvent) {
+		event.preventDefault();
+		const wheelDeltaFactor =
+			event.deltaMode === event.DOM_DELTA_PIXEL
+				? 120
+				: event.deltaMode === event.DOM_DELTA_LINE
+				? 3
+				: 1;
+		const delta = event.deltaY / wheelDeltaFactor;
+		this.scaleLevel += -delta * 0.2;
+	}
+
 	animationRender() {
 		this.#animationFrameId = requestAnimationFrame(() => {
 			this.animationRender();
@@ -60,6 +78,9 @@ export class SimulationRenderer extends LitElement {
 		const { clientWidth, clientHeight } = canvas;
 		canvas.width = clientWidth * window.devicePixelRatio;
 		canvas.height = clientHeight * window.devicePixelRatio;
+
+		this.simulation.camera.scale = 2 ** this.scaleLevel;
+		this.robotController.camera.scale = 2 ** this.scaleLevel;
 
 		const t = 1 / 60;
 		ctx.clearRect(0, 0, clientWidth, clientHeight);
@@ -98,7 +119,7 @@ export class SimulationRenderer extends LitElement {
 			);
 		const currentRobotPoseEstimateWithRecentOdometry = RotoTranslation.combine(
 			currentRobotPoseEstimate,
-			this.robotController.odometrySinceLastScan.rotoTranslation
+			this.robotController.odometrySinceLastRecord.rotoTranslation
 		);
 		const initialRobotPoseEstimate =
 			this.robotController.slam.poseGraph.getNodeEstimate(0);

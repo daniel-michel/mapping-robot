@@ -86,7 +86,7 @@ export class Grid<T> {
 				}
 			}
 		}
-		newGrid.tryUnify();
+		newGrid.#tryUnify();
 		return newGrid;
 	}
 
@@ -151,7 +151,7 @@ export class Grid<T> {
 				}
 			}
 		}
-		this.tryUnify();
+		this.#tryUnify();
 	}
 
 	simplifyCell(coordinates: number[]) {
@@ -172,11 +172,11 @@ export class Grid<T> {
 			) {
 				delete this.children.nodes[childIndex];
 			}
-			this.tryUnify();
+			this.#tryUnify();
 		}
 	}
 
-	tryUnify() {
+	#tryUnify() {
 		if (this.children.leaf) {
 			return;
 		}

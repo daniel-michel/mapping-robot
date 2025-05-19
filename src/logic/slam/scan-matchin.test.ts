@@ -1,6 +1,6 @@
-import { assertAlmostEqualRotoTranslation } from "./math/roto-translation.test.ts";
-import { RotoTranslation } from "./math/roto-translation.ts";
-import { Vec2 } from "./math/vec.ts";
+import { assertAlmostEqualRotoTranslation } from "../math/roto-translation.test.ts";
+import { RotoTranslation } from "../math/roto-translation.ts";
+import { Vec2 } from "../math/vec.ts";
 import { computeRotoTranslation } from "./scan-matching.ts";
 
 Deno.test({

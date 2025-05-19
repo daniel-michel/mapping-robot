@@ -28,6 +28,7 @@ export type RangingSensorScan = {
 	angleStep: number;
 	/** Number of distance measurements */
 	count: number;
+	distanceRange: [number, number];
 	points: {
 		/** The angle of distance measurement relative to the center of the measurement region */
 		angle: number;
@@ -44,13 +45,16 @@ export class SimulationRobot implements Robot {
 	transform: RotoTranslation = new RotoTranslation(0, [0, 0]);
 
 	rangingSensor: RangingSensorConfig = {
-		rotationAngle: 360 * DEG_TO_RAD,
+		rotationAngle: 180 * DEG_TO_RAD,
 		/** this is the targeted step size not actually used */
-		targetAngleStepSize: 2 * DEG_TO_RAD,
+		// targetAngleStepSize: 2 * DEG_TO_RAD,
+		targetAngleStepSize: 5 * DEG_TO_RAD,
 		distanceRange: [2, 780],
-		distanceAccuracy: 4,
+		// distanceAccuracy: 4,
+		distanceAccuracy: 6,
 		// distanceAccuracy: 0,
-		angularAccuracy: 2.5 * DEG_TO_RAD,
+		// angularAccuracy: 2.5 * DEG_TO_RAD,
+		angularAccuracy: 4.5 * DEG_TO_RAD,
 		// angularAccuracy: 0,
 		refreshTime: 1 / 50,
 	};
@@ -112,6 +116,7 @@ export class SimulationRobot implements Robot {
 			angleStep,
 			count: stepCount,
 			points,
+			distanceRange: this.rangingSensor.distanceRange,
 		} satisfies RangingSensorScan;
 	}
 
@@ -141,7 +146,7 @@ export class SimulationRobot implements Robot {
 			this.positionHistory.shift();
 		}
 
-		const errorFactor = 0.2;
+		const errorFactor = 0.1;
 		// const errorFactor = 0.05;
 		// const errorFactor = 0;
 		const leftError = random([-1, 0.4]) * errorFactor * left;

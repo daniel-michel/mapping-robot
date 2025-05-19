@@ -1,9 +1,14 @@
-import { Grid } from "./grid.ts";
-import { RotoTranslation } from "./math/roto-translation.ts";
-import { Vec2 } from "./math/vec.ts";
-import { generateOccupancyGrid, OccupancyGrid } from "./occupancy-grid.ts";
-import { RangingSensorScan } from "./robot.ts";
+import { Grid } from "../data-structures/grid.ts";
+import { RotoTranslation } from "../math/roto-translation.ts";
+import { Vec2 } from "../math/vec.ts";
+import {
+	generateOccupancyGrid,
+	OccupancyGrid,
+	OccupancyProbGrid,
+} from "./occupancy-grid.ts";
+import { RangingSensorScan } from "../robot.ts";
 import { asyncScanMatching } from "./scan-matching.ts";
+import { angleDiff, angleDiffAbs, angleNormalize } from "../math/util.ts";
 
 export type Constraint = {
 	nodes: [number, number];
@@ -125,7 +130,7 @@ export class Slam {
 	poseId = 0;
 
 	occupancyGridResolution = 10;
-	occupancyGrid: OccupancyGrid = new Grid(2);
+	occupancyGrid: OccupancyProbGrid = new Grid(2);
 
 	correspondences: {
 		poseA: number;
@@ -174,22 +179,83 @@ export class Slam {
 		});
 
 		const currentPose = this.poseGraph.getNodeEstimate(this.poseId);
-		const score = (id: number, transform: RotoTranslation) =>
-			Vec2.distanceSquared(transform.translation, currentPose.translation) +
-			id * 5;
+		const score = (id: number, transform: RotoTranslation) => {
+			const expectedOverlap = this.expectedOverlapWithScanOfPose(
+				id,
+				RotoTranslation.relative(currentPose, transform)
+			);
+			if (expectedOverlap < 0.4) {
+				return Infinity;
+			}
+			return (
+				1 / expectedOverlap ** 2 +
+				Vec2.distanceSquared(transform.translation, currentPose.translation) *
+					0.002
+			);
+		};
 		const sorted = this.poseGraph.nodeEstimates
 			.entries()
 			.map(([id, estimate]) => {
+				if (id === this.poseId) {
+					return null;
+				}
 				const s = score(id, estimate);
+				console.log(s);
 				return { id, estimate, s };
 			})
-			.filter(({ id }) => id !== this.poseId)
+			.filter((i) => i !== null)
+			.filter(({ s }) => s < 30)
 			.toArray()
 			.sort((a, b) => a.s - b.s);
-		const best = sorted.slice(0, 2);
-		for (const { id } of best) {
-			this.matchScans(id, this.poseId);
-		}
+		const best = sorted.slice(0, 5);
+		console.log("Best matches", best);
+
+		Promise.all(best.map(({ id }) => this.matchScans(id, this.poseId))).then(
+			() => {
+				// this.updateOccupancyGrid();
+			}
+		);
+		// for (const { id } of best) {
+		// 	this.matchScans(id, this.poseId);
+		// }
+	}
+
+	/**
+	 *
+	 * @param poseId
+	 * @param transform The transform where the new scan would be taken relative to the scan at poseId
+	 * @returns A value in the interval [0; 1] describing the percentage of overlap
+	 */
+	expectedOverlapWithScanOfPose(poseId: number, transform: RotoTranslation) {
+		const { scan } = this.scans.get(poseId)!;
+		const angle = scan.angle;
+		const inverseTransform = transform.inverse();
+		const transMat = inverseTransform.matrix();
+		const scanOrigin = transMat.mulVec2(new Vec2([0, 0]));
+		const pointsWithinNewScan = scan.points.filter(({ point }) => {
+			if (!point) {
+				return false;
+			}
+			const transformedPoint = transMat.mulVec2(point);
+			const rayDirectionSimilarity = Vec2.dot(
+				transformedPoint.copy().mul(-1).normalize(),
+				scanOrigin.copy().sub(transformedPoint).normalize()
+			);
+			if (rayDirectionSimilarity < 0) {
+				return false;
+			}
+			if (transformedPoint.magnitude() > scan.distanceRange[1]) {
+				return false;
+			}
+			if (
+				Math.abs(angleDiff(transformedPoint.heading(), Math.PI / 2)) >
+				angle / 2
+			) {
+				return false;
+			}
+			return true;
+		});
+		return pointsWithinNewScan.length / scan.count;
 	}
 
 	updateOccupancyGrid() {
@@ -215,15 +281,23 @@ export class Slam {
 		const firstPose = this.poseGraph.getNodeEstimate(firstPoseId);
 		const secondPose = this.poseGraph.getNodeEstimate(secondPoseId);
 		const reverseTransform = RotoTranslation.relative(secondPose, firstPose);
-		const { transform: improvedTransform, converged } = await asyncScanMatching(
-			firstScan,
-			secondScan,
-			reverseTransform
-		);
+		const {
+			transform: improvedTransform,
+			converged,
+			error,
+			overlap,
+		} = await asyncScanMatching(firstScan, secondScan, reverseTransform);
+		console.log({
+			converged,
+			error,
+			overlap,
+			confidence: (overlap / error) * 10,
+		});
 		this.poseGraph.addConstraint({
 			nodes: [firstPoseId, secondPoseId],
 			transform: improvedTransform,
-			strength: converged ? 0.5 : 0.1,
+			// strength: converged ? 0.5 : 0.1,
+			strength: (overlap / error) * 10 * (converged ? 0.5 : 1),
 		});
 		// this.poseGraph.optimize(5);
 

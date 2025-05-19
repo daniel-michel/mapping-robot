@@ -1,5 +1,5 @@
 import { assertAlmostEquals } from "jsr:@std/assert";
-import { Mat2Array, svd2x2 } from "./mat.ts";
+import { Mat2Array, matToString, svd2x2 } from "./mat.ts";
 
 const assertAlmostEqualMatrix = (
 	a: number[][],
@@ -7,13 +7,16 @@ const assertAlmostEqualMatrix = (
 	message = "Matrices are not equal",
 	epsilon = 1e-6
 ) => {
+	const correctionFactors = a.map((r, i) => r.map((v, j) => b[i][j] / v));
 	for (let i = 0; i < a.length; i++) {
 		for (let j = 0; j < a[i].length; j++) {
 			assertAlmostEquals(
 				a[i][j],
 				b[i][j],
 				epsilon,
-				`${message} at [${i}][${j}]: ${a[i][j]} !== ${b[i][j]}`
+				`${message} at [${i}][${j}]: ${a[i][j]} !== ${b[i][j]}\n${matToString(
+					correctionFactors
+				)}`
 			);
 		}
 	}

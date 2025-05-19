@@ -5,93 +5,91 @@ import {
 	mulMatArray,
 	svd2x2,
 	transposeMat,
-} from "./math/mat.ts";
-import { RotoTranslation } from "./math/roto-translation.ts";
-import { angleDiff, angleNormalize } from "./math/util.ts";
-import { Vec2 } from "./math/vec.ts";
-import { RangingSensorScan } from "./robot.ts";
+} from "../math/mat.ts";
+import { RotoTranslation } from "../math/roto-translation.ts";
+import { angleDiff, angleNormalize } from "../math/util.ts";
+import { Vec2 } from "../math/vec.ts";
+import { RangingSensorScan } from "../robot.ts";
 
-if ("postMessage" in self) {
-	self.addEventListener("message", (e: MessageEvent) => {
-		switch (e.data.action) {
-			case "scanMatching": {
-				const result = scanMatching(
-					{
-						...e.data.scanA,
-						points: e.data.scanA.points.map((point) => ({
-							...point,
-							point: point.point && new Vec2(point.point),
-						})),
-					},
-					{
-						...e.data.scanB,
-						points: e.data.scanB.points.map((point) => ({
-							...point,
-							point: point.point && new Vec2(point.point),
-						})),
-					},
-					new RotoTranslation(
-						...(e.data.initialTransform as [number, [number, number]])
-					)
-				);
-				self.postMessage({
-					transform: [
-						result.transform.rotation,
-						[...result.transform.translation],
-					],
-					converged: result.converged,
-				});
-				break;
-			}
+self.addEventListener("message", (e: MessageEvent) => {
+	switch (e.data.action) {
+		case "scanMatching": {
+			const result = scanMatching(
+				{
+					...e.data.scanA,
+					points: e.data.scanA.points.map((point) => ({
+						...point,
+						point: point.point && new Vec2(point.point),
+					})),
+				},
+				{
+					...e.data.scanB,
+					points: e.data.scanB.points.map((point) => ({
+						...point,
+						point: point.point && new Vec2(point.point),
+					})),
+				},
+				new RotoTranslation(
+					...(e.data.initialTransform as [number, [number, number]])
+				)
+			);
+			self.postMessage({
+				...result,
+				transform: [
+					result.transform.rotation,
+					[...result.transform.translation],
+				],
+			});
+			break;
 		}
-	});
-}
+	}
+});
 
 export function asyncScanMatching(
 	scanA: RangingSensorScan,
 	scanB: RangingSensorScan,
 	initialTransform: RotoTranslation
 ) {
-	return new Promise<{ transform: RotoTranslation; converged: boolean }>(
-		(resolve) => {
-			const worker = new Worker(
-				new URL("./scan-matching.js", import.meta.url),
-				{
-					type: "module",
-				}
-			);
-			worker.addEventListener("message", (e) => {
-				worker.terminate();
-				resolve({
-					transform: new RotoTranslation(
-						...(e.data.transform as [number, [number, number]])
-					),
-					converged: e.data.converged,
-				});
+	return new Promise<{
+		transform: RotoTranslation;
+		converged: boolean;
+		error: number;
+		overlap: number;
+	}>((resolve) => {
+		const worker = new Worker(new URL("./scan-matching.js", import.meta.url), {
+			type: "module",
+		});
+		worker.addEventListener("message", (e) => {
+			worker.terminate();
+			resolve({
+				...e.data,
+				transform: new RotoTranslation(
+					...(e.data.transform as [number, [number, number]])
+				),
 			});
-			worker.postMessage({
-				action: "scanMatching",
-				scanA: {
-					...scanA,
-					points: scanA.points.map((point) => ({
-						...point,
-						point: point.point && [...point.point],
-					})),
-				},
-				scanB: {
-					...scanB,
-					points: scanB.points.map((point) => ({
-						...point,
-						point: point.point && [...point.point],
-					})),
-				},
-				initialTransform: [
-					initialTransform.rotation,
-					[...initialTransform.translation],
-				],
-			});
-		}
-	);
+		});
+		worker.postMessage({
+			action: "scanMatching",
+			scanA: {
+				...scanA,
+				points: scanA.points.map((point) => ({
+					...point,
+					point: point.point && [...point.point],
+				})),
+			},
+			scanB: {
+				...scanB,
+				points: scanB.points.map((point) => ({
+					...point,
+					point: point.point && [...point.point],
+				})),
+			},
+			initialTransform: [
+				initialTransform.rotation,
+				[...initialTransform.translation],
+			],
+		});
+	});
 }
 
 export function scanMatching(
@@ -104,8 +102,16 @@ export function scanMatching(
 	const MAX_ITERATIONS = 50;
 	let previousCorrespondences: (number | null)[] = [];
 	let converged = false;
+	let error = Infinity;
+	// e (xi) is the percentage of least trimmed squares that are considered to be overlapping
+	let e = 1;
 
 	for (let i = 0; i < MAX_ITERATIONS; i++) {
+		const currentTransformMatrix = transform.matrix();
+		const scanBTransformed = scanB.points.map(
+			({ point }) => point && currentTransformMatrix.mulVec2(point)
+		);
+
 		const correspondences = correspondenceMatch(
 			scanA,
 			scanB,
@@ -127,14 +133,45 @@ export function scanMatching(
 			.map((i, j) => {
 				const a = i !== null ? scanA.points[i].point : null;
 				const b = scanB.points[j].point;
-				if (!a || !b) {
+				const bTransformed = scanBTransformed[j];
+				if (!a || !b || !bTransformed) {
 					return null;
 				}
-				return [a, b] as const;
+				return {
+					aPoint: a,
+					bPoint: b,
+					aIndex: i,
+					bIndex: j,
+					distSquared: Vec2.distanceSquared(a, bTransformed),
+				};
 			})
 			.filter((i) => i !== null);
-		const sourcePoints = pointPairs.map((a) => a[1]);
-		const targetPoints = pointPairs.map((a) => a[0]);
+
+		// Use the algorithm described by "The Trimmed Iterative Closest Point Algorithm" to trim away pairs with too square distance errors
+		pointPairs.sort((a, b) => a.distSquared - b.distSquared);
+
+		const mse = (set: { distSquared: number }[]) =>
+			set.reduce((acc, { distSquared }) => acc + distSquared, 0) / set.length;
+		// lambda >= 0 (higher values can help avoid undesirable alignments of symmetric and featureless parts of the point sets)
+		const lambda = 2;
+		// e should be chosen such that this function is minimized
+		const psi = (e: number) =>
+			mse(pointPairs.slice(0, Math.round(pointPairs.length * e))) *
+			e ** -(1 + lambda);
+		let currentMin = Infinity;
+		for (let x = 0.4; x <= 1; x += 0.05) {
+			const val = psi(x);
+			if (val < currentMin) {
+				e = x;
+				currentMin = val;
+			}
+		}
+
+		const bestPairs = pointPairs.slice(0, Math.round(pointPairs.length * e));
+		error = mse(bestPairs);
+
+		const sourcePoints = bestPairs.map(({ bPoint }) => bPoint);
+		const targetPoints = bestPairs.map(({ aPoint }) => aPoint);
 		const rotoTranslation = computeRotoTranslation(sourcePoints, targetPoints);
 		transform = rotoTranslation;
 	}
@@ -142,7 +179,7 @@ export function scanMatching(
 		console.warn("Scan matching did not converge");
 	}
 
-	return { transform, converged };
+	return { transform, converged, error, overlap: e };
 }
 
 export function sampleGradient<T extends number[]>(
@@ -208,7 +245,7 @@ export function* correspondenceMatch(
 					upStopped = true;
 					continue;
 				}
-				lastDistUp = pwi.copy().sub(scanA.points[up].point!).magnitudeSquared();
+				lastDistUp = pwi.copy().sub(scanA.points[up].point).magnitudeSquared();
 				// FIXME: what does "correspondence is acceptable" mean?
 				if (/* correspondence is acceptable && */ lastDistUp < bestDist) {
 					best = up;
@@ -232,7 +269,7 @@ export function* correspondenceMatch(
 				}
 				lastDistDown = pwi
 					.copy()
-					.sub(scanA.points[down].point!)
+					.sub(scanA.points[down].point)
 					.magnitudeSquared();
 				// FIXME: what does "correspondence is acceptable" mean?
 				if (/* correspondence is acceptable && */ lastDistDown < bestDist) {

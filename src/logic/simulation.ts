@@ -7,10 +7,10 @@ import {
 	savedState,
 } from "./rendering";
 import { RangingSensorScan, SimulationRobot } from "./robot";
-import { World } from "./world";
+import { generateGraphWorld } from "./world-generation.ts";
 
 export class Simulation {
-	world = World.generate(hashString("hello world"));
+	world = generateGraphWorld(hashString("hello world"));
 	robot = new SimulationRobot(15, 5, this.world);
 	camera: Camera = {
 		transform: this.robot.transform.copy(),
