@@ -1,7 +1,7 @@
 import { RotoTranslation } from "./math/roto-translation";
 import { clamp } from "./math/util.ts";
-import { Vec2 } from "./math/vec";
-import { OccupancyProbGrid } from "./slam/occupancy-grid.ts";
+import { Vec2, Vec2Like } from "./math/vec";
+import { OccupancyBin, OccupancyProb } from "./slam/occupancy-grid.ts";
 import {
 	rotoTranslateCtx,
 	Camera,
@@ -11,6 +11,24 @@ import {
 import { calculateOdometry, Robot } from "./robot";
 import { Slam } from "./slam/slam.ts";
 import { sleep } from "./util";
+import { Grid } from "./data-structures/grid.ts";
+
+const renderOccupancyProbGrid = gridRenderer<OccupancyProb>(
+	(value) =>
+		`hsla(${120 - value.prob * 120}, 100%, 70%, ${
+			(1 - 1 / (1 + value.weight * 0.5)) * 0.3
+		})`,
+	false
+);
+const renderOccupancyGrid = gridRenderer<OccupancyBin>(
+	(value) =>
+		value === 1 ? "hsla(0, 0%, 100%, 0.3)" : "hsla(230, 100%, 65%, 0.1)",
+	false
+);
+const renderExploreGrid = gridRenderer<true>(
+	() => "hsla(313, 100.00%, 65.70%, 0.4)",
+	false
+);
 
 export class RobotController {
 	robot: Robot;
@@ -26,8 +44,41 @@ export class RobotController {
 		scale: 1,
 	};
 
+	highlightedCells: { coords: Vec2Like; lifetime: number }[] = [];
+
 	constructor(robot: Robot) {
 		this.robot = robot;
+
+		(async () => {
+			while (true) {
+				await sleep(3_000);
+				await new Promise((r) => requestAnimationFrame(r));
+				const start = this.getCurrentRobotPose()
+					.translation.copy()
+					.div(this.slam.occupancyGridResolution);
+				const startTime = Date.now();
+				for (const cell of this.slam.occupancyGrids.explore.traverseOutward(
+					this.getCurrentRobotPose()
+						.translation.copy()
+						.div(this.slam.occupancyGridResolution).vec
+				)) {
+					const dist = Vec2.distance(
+						Vec2.wrapped(cell.coords as Vec2Like),
+						start
+					);
+					const targetTime = startTime + dist * 50;
+					this.highlightedCells.push({
+						coords: cell.coords as Vec2Like,
+						lifetime: (Date.now() - targetTime) / 1_000,
+					});
+					this.highlightedCells;
+					const timeout = targetTime - 10 - Date.now();
+					if (timeout > 5) {
+						await sleep(timeout);
+					}
+				}
+			}
+		})();
 	}
 
 	getGamepadInput(): {
@@ -234,7 +285,50 @@ export class RobotController {
 					this.slam.occupancyGridResolution,
 					this.slam.occupancyGridResolution
 				);
-				renderOccupancyGrid(ctx, this.slam.occupancyGrid);
+				renderOccupancyProbGrid(ctx, this.slam.occupancyGrids.prob);
+				renderOccupancyGrid(ctx, this.slam.occupancyGrids.bin);
+				renderExploreGrid(ctx, this.slam.occupancyGrids.explore);
+
+				const CELL_LIFE_TIME = 1;
+				for (const cell of this.highlightedCells) {
+					cell.lifetime += t;
+					if (cell.lifetime < 0) {
+						continue;
+					}
+					const intensity = clamp(1 - cell.lifetime / CELL_LIFE_TIME, [0, 1]);
+					ctx.strokeStyle = `hsla(313, 100.00%, 65.70%, ${intensity})`;
+					saved(() => {
+						ctx.translate(cell.coords[0], cell.coords[1]);
+						ctx.lineWidth = clamp(0.2 * intensity, [0.01, 0.2]);
+						ctx.beginPath();
+						ctx.rect(-0.5, -0.5, 1, 1);
+						ctx.stroke();
+					});
+				}
+				this.highlightedCells = this.highlightedCells.filter(
+					({ lifetime }) => lifetime < CELL_LIFE_TIME
+				);
+			});
+
+			saved(() => {
+				const robotPos = this.getCurrentRobotPose().translation;
+				const closestCell = this.slam.occupancyGrids.explore.findClosest(
+					robotPos.copy().div(this.slam.occupancyGridResolution).vec,
+					(v) => v
+				);
+				if (!closestCell) {
+					return;
+				}
+				const closest = new Vec2(closestCell as [number, number]).mul(
+					this.slam.occupancyGridResolution
+				);
+
+				ctx.beginPath();
+				ctx.moveTo(robotPos.x, robotPos.y);
+				ctx.lineTo(closest.x, closest.y);
+				ctx.strokeStyle = "#f0f";
+				ctx.lineWidth = 1;
+				ctx.stroke();
 			});
 
 			const poseIds = this.slam.poseGraph.nodeEstimates.keys().toArray();
@@ -273,9 +367,17 @@ export class RobotController {
 	}
 }
 
-function renderOccupancyGrid(
+function gridRenderer<T>(color: (value: T) => string, showGridLines: boolean) {
+	return (ctx: CanvasRenderingContext2D, grid: Grid<T>) => {
+		renderGrid(ctx, grid, color, showGridLines);
+	};
+}
+
+function renderGrid<T>(
 	ctx: CanvasRenderingContext2D,
-	grid: OccupancyProbGrid,
+	grid: Grid<T>,
+	color: (value: T) => string,
+	showGridLines: boolean,
 	depth = 0
 ) {
 	if (depth > 10) {
@@ -286,15 +388,16 @@ function renderOccupancyGrid(
 	saved(() => {
 		const scaleFactor = 3 ** grid.level;
 		ctx.scale(scaleFactor, scaleFactor);
+		if (showGridLines && grid.level > 0) {
+			ctx.strokeStyle = "#04a2";
+			ctx.lineWidth =
+				((0.1 / scaleFactor) * Math.log2(grid.level / 10 + 2)) / Math.log2(2);
+			ctx.strokeRect(-0.5, -0.5, 1, 1);
+		}
 		if (children.leaf) {
 			const value = children.value;
 			if (value !== undefined) {
-				ctx.fillStyle = `hsla(${120 - value.prob * 120}, 100%, 70%, ${
-					(1 - 1 / (1 + value.weight * 0.5)) * 0.3
-				})`;
-				// ctx.fillStyle = `hsl(${value === 1 ? 0 : 120}, 30%, 10%)`;
-				// ctx.fillStyle =
-				// 	value === 1 ? "hsla(0, 0%, 100%, 0.5)" : "hsla(230, 100%, 65%, 0.2)";
+				ctx.fillStyle = color(value);
 				const margin = 0.2 / scaleFactor;
 				ctx.fillRect(
 					-0.5 + margin,
@@ -304,12 +407,6 @@ function renderOccupancyGrid(
 				);
 			}
 		} else {
-			// if (grid.level > 0) {
-			// 	ctx.strokeStyle = "#04a2";
-			// 	ctx.lineWidth =
-			// 		((0.1 / scaleFactor) * Math.log2(grid.level / 10 + 2)) / Math.log2(2);
-			// 	ctx.strokeRect(-0.5, -0.5, 1, 1);
-			// }
 			for (let i = 0; i < children.nodes.length; i++) {
 				const child = children.nodes[i];
 				if (child) {
@@ -319,7 +416,7 @@ function renderOccupancyGrid(
 							(Math.floor(i / 3) * 1) / 3 - 1 / 3
 						);
 						ctx.scale(1 / scaleFactor, 1 / scaleFactor);
-						renderOccupancyGrid(ctx, child, depth + 1);
+						renderGrid(ctx, child, color, showGridLines, depth + 1);
 					});
 				}
 			}

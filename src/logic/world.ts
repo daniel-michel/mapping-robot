@@ -5,8 +5,8 @@ import {
 	RayLineIntersectionResult,
 	Vec2,
 } from "./math/vec.ts";
-import { AABBTree } from "./data-structures/aabb-tree";
-import { Rect } from "./math/rect";
+import { AABBTree } from "./data-structures/aabb-tree.ts";
+import { Rect } from "./math/rect.ts";
 
 export class World {
 	walls: Line[];

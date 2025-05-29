@@ -1,30 +1,24 @@
-import { Rect } from "../math/rect";
-import { Vec2 } from "../math/vec";
+import { Rect } from "../math/rect.ts";
+import { Vec2 } from "../math/vec.ts";
 import { PriorityQueue } from "./priority-queue.ts";
 
-// Function type for computing Rect from an object
-export type RectGetter<T> = (obj: T) => Rect;
-
-// Tree node definition as a union type
 type LeafNode<T> = {
 	rect: Rect;
 	value: T;
-	// no children
 };
 type InternalNode<T> = {
 	rect: Rect;
 	left: TreeNode<T>;
 	right: TreeNode<T>;
-	// no value
 };
 type TreeNode<T> = LeafNode<T> | InternalNode<T>;
 
 export class AABBTree<T> {
 	root: TreeNode<T> | null = null;
-	private getRect: RectGetter<T>;
+	#bounds;
 
-	constructor(objects: T[], getRect: RectGetter<T>) {
-		this.getRect = getRect;
+	constructor(objects: T[], bounds: (obj: T) => Rect) {
+		this.#bounds = bounds;
 		this.root = this.build(objects);
 	}
 
@@ -32,17 +26,16 @@ export class AABBTree<T> {
 		if (objects.length === 0) return null;
 		if (objects.length === 1) {
 			return {
-				rect: this.getRect(objects[0]),
+				rect: this.#bounds(objects[0]),
 				value: objects[0],
 			};
 		}
-		// Compute overall Rect
 		const overall = this.computeOverallRect(objects);
 		// Split objects by longest axis
 		const axis = overall.size.x > overall.size.y ? "x" : "y";
 		objects.sort((a, b) => {
-			const aRect = this.getRect(a);
-			const bRect = this.getRect(b);
+			const aRect = this.#bounds(a);
+			const bRect = this.#bounds(b);
 			const aCenter = axis === "x" ? aRect.center.x : aRect.center.y;
 			const bCenter = axis === "x" ? bRect.center.x : bRect.center.y;
 			return aCenter - bCenter;
@@ -60,24 +53,21 @@ export class AABBTree<T> {
 	}
 
 	private computeOverallRect(objects: T[]): Rect {
-		return Rect.containing(objects.map(this.getRect));
+		return Rect.containing(objects.map(this.#bounds));
 	}
 
 	// Example query: find all objects whose Rect intersects a given Rect
-	query(
-		rect: Rect,
-		node: TreeNode<T> | null = this.root,
-		result: T[] = []
-	): T[] {
-		if (!node) return result;
-		if (!Rect.overlap(rect, node.rect)) return result;
+	*query(rect: Rect, node: TreeNode<T> | null = this.root): Generator<T> {
+		if (!node) return;
+		if (!Rect.overlap(rect, node.rect)) return;
 		if ("value" in node) {
-			if (Rect.overlap(rect, node.rect)) result.push(node.value);
+			if (Rect.overlap(rect, node.rect)) {
+				yield node.value;
+			}
 		} else {
-			this.query(rect, node.left, result);
-			this.query(rect, node.right, result);
+			yield* this.query(rect, node.left);
+			yield* this.query(rect, node.right);
 		}
-		return result;
 	}
 
 	*raycast(

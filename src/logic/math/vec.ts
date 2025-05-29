@@ -144,6 +144,9 @@ export class Vec2 {
 	static mul(a: Vec2Like, s: number) {
 		return new Vec2([a[0] * s, a[1] * s]);
 	}
+	static mulElementWise(a: Vec2Like, b: Vec2Like) {
+		return new Vec2([a[0] * b[0], a[1] * b[1]]);
+	}
 	static div(a: Vec2Like, s: number) {
 		return new Vec2([a[0] / s, a[1] / s]);
 	}
@@ -277,7 +280,7 @@ export function lineLineIntersection(
 	const u =
 		-((as.x - ae.x) * (as.y - bs.y) - (as.y - ae.y) * (as.x - bs.x)) / divisor;
 	const intersecting = t >= 0 && t <= 1 && u >= 0 && u <= 1;
-	const intersection = as.copy().add(ae.copy().sub(as).mul(t));
+	const intersection = Vec2.add(as, Vec2.sub(ae, as).mul(t));
 	return {
 		intersecting,
 		intersection,
@@ -289,7 +292,7 @@ export function lineLineIntersection(
 }
 
 export function rayLineIntersection(
-	ray: [origin: Vec2Like, direction: Vec2Like],
+	ray: Ray,
 	line: Line
 ): RayLineIntersectionResult | null {
 	const direction = Vec2.wrapped(ray[1]).copy().normalize();
@@ -302,7 +305,6 @@ export function rayLineIntersection(
 	}
 	const intersecting =
 		intersection.t >= 0 && intersection.u >= 0 && intersection.u <= 1;
-	// const intersectionPoint = intersection.intersection;
 	return {
 		...intersection,
 		intersecting,

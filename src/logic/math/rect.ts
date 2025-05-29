@@ -1,4 +1,4 @@
-import { Vec2, Vec2Like } from "./vec";
+import { Vec2, Vec2Like } from "./vec.ts";
 
 export class Rect {
 	#center: Vec2;

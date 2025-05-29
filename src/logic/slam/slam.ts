@@ -5,10 +5,11 @@ import {
 	generateOccupancyGrid,
 	OccupancyGrid,
 	OccupancyProbGrid,
+	toBinaryOccupancyGrid,
 } from "./occupancy-grid.ts";
 import { RangingSensorScan } from "../robot.ts";
 import { asyncScanMatching } from "./scan-matching.ts";
-import { angleDiff, angleDiffAbs, angleNormalize } from "../math/util.ts";
+import { angleDiff } from "../math/util.ts";
 
 export type Constraint = {
 	nodes: [number, number];
@@ -130,7 +131,15 @@ export class Slam {
 	poseId = 0;
 
 	occupancyGridResolution = 10;
-	occupancyGrid: OccupancyProbGrid = new Grid(2);
+	occupancyGrids: {
+		prob: OccupancyProbGrid;
+		bin: OccupancyGrid;
+		explore: Grid<true>;
+	} = {
+		prob: new Grid(2),
+		bin: new Grid(2),
+		explore: new Grid(2),
+	};
 
 	correspondences: {
 		poseA: number;
@@ -200,7 +209,6 @@ export class Slam {
 					return null;
 				}
 				const s = score(id, estimate);
-				console.log(s);
 				return { id, estimate, s };
 			})
 			.filter((i) => i !== null)
@@ -208,16 +216,12 @@ export class Slam {
 			.toArray()
 			.sort((a, b) => a.s - b.s);
 		const best = sorted.slice(0, 5);
-		console.log("Best matches", best);
 
 		Promise.all(best.map(({ id }) => this.matchScans(id, this.poseId))).then(
 			() => {
 				// this.updateOccupancyGrid();
 			}
 		);
-		// for (const { id } of best) {
-		// 	this.matchScans(id, this.poseId);
-		// }
 	}
 
 	/**
@@ -266,9 +270,27 @@ export class Slam {
 				transform,
 			};
 		});
-		this.occupancyGrid = generateOccupancyGrid(
+		this.occupancyGrids.prob = generateOccupancyGrid(
 			scans.toArray(),
 			this.occupancyGridResolution
+		);
+		this.occupancyGrids.bin = toBinaryOccupancyGrid(this.occupancyGrids.prob);
+		this.occupancyGrids.explore = this.occupancyGrids.bin.convolve(
+			(v, getNeighbor) => {
+				if (v !== 0) {
+					return undefined;
+				}
+				for (const d of [0, 1]) {
+					for (const o of [-1, 1]) {
+						const coords = [0, 0];
+						coords[d] = o;
+						const neighbor = getNeighbor(coords);
+						if (neighbor === undefined) {
+							return true;
+						}
+					}
+				}
+			}
 		);
 	}
 
@@ -328,10 +350,6 @@ export class Slam {
 
 	getAbsoluteSurfaces() {
 		const absoluteSurfaces: Surface[] = [];
-		// for (const [poseId, { surfaces }] of this.scans
-		// 	.entries()
-		// 	.toArray()
-		// 	.slice(-2)) {
 		for (const [poseId, { surfaces }] of this.scans) {
 			const transform = this.poseGraph.getNodeEstimateMat(poseId);
 			for (const surface of surfaces) {

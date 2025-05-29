@@ -3,11 +3,11 @@ import { RotoTranslation } from "../math/roto-translation.ts";
 import { Vec2 } from "../math/vec.ts";
 import { RangingSensorScan } from "../robot.ts";
 
-export type occupancyProb = {
+export type OccupancyProb = {
 	prob: number;
 	weight: number;
 };
-export type OccupancyProbGrid = Grid<occupancyProb>;
+export type OccupancyProbGrid = Grid<OccupancyProb>;
 /** 0 = free, 1 = occupied, undefined = unknown */
 export type OccupancyBin = 0 | 1;
 export type OccupancyGrid = Grid<OccupancyBin>;
@@ -19,7 +19,7 @@ export function generateOccupancyGrid(
 	}[],
 	resolution: number = 0.3
 ) {
-	const probabilityGrid = new Grid<occupancyProb>(2);
+	const probabilityGrid = new Grid<OccupancyProb>(2);
 	for (const { scan, transform } of scans) {
 		const scanOrigin = transform.apply(new Vec2([0, 0])).freeze();
 		for (const { point } of scan.points) {
@@ -33,7 +33,7 @@ export function generateOccupancyGrid(
 			).forEach((point, i) => {
 				const value = i === 0 ? 1 : 0;
 				const dilution =
-					Vec2.distance(point, scanOrigin.copy().div(resolution)) * 0.05;
+					0.5 + Vec2.distance(point, scanOrigin.copy().div(resolution)) * 0.05;
 				addToProbabilityGridDiluted(probabilityGrid, point, value, dilution);
 			});
 		}
@@ -44,8 +44,8 @@ export function generateOccupancyGrid(
 export function toBinaryOccupancyGrid(
 	probabilityGrid: OccupancyProbGrid
 ): OccupancyGrid {
-	return probabilityGrid.map(({ prob, weight: count }) => {
-		if (count === 0) {
+	return probabilityGrid.map(({ prob, weight }) => {
+		if (weight < 1) {
 			return undefined;
 		}
 		if (prob > 0.2) {

@@ -18,6 +18,8 @@ export class SimulationRenderer extends LitElement {
 
 	scaleLevel = 0;
 
+	lastRenderTime = 0;
+
 	constructor() {
 		super();
 		setTimeout(() => {
@@ -32,7 +34,12 @@ export class SimulationRenderer extends LitElement {
 				@wheel=${this.#onWheel}
 			></canvas>
 			<div class="buttons">
-				<button @click=${() => this.robotController.slam.updateOccupancyGrid()}>
+				<button
+					@click=${() => {
+						this.robotController.slam.updateOccupancyGrid();
+						this.robotController.currentPath = undefined;
+					}}
+				>
 					Update Occupancy Grid
 				</button>
 			</div>`;
@@ -41,9 +48,9 @@ export class SimulationRenderer extends LitElement {
 	connectedCallback(): void {
 		super.connectedCallback();
 		if (!this.#animationFrameId) {
-			this.#animationFrameId = requestAnimationFrame(() => {
-				this.animationRender();
-			});
+			this.#animationFrameId = requestAnimationFrame(
+				this.animationRender.bind(this)
+			);
 		}
 	}
 
@@ -67,10 +74,16 @@ export class SimulationRenderer extends LitElement {
 		this.scaleLevel += -delta * 0.2;
 	}
 
-	animationRender() {
-		this.#animationFrameId = requestAnimationFrame(() => {
-			this.animationRender();
-		});
+	animationRender(timestamp: number) {
+		this.#animationFrameId = requestAnimationFrame(
+			this.animationRender.bind(this)
+		);
+
+		const timeSinceLastRender = timestamp - this.lastRenderTime;
+		const t =
+			timeSinceLastRender > 1_000 ? 1 / 1000 : timeSinceLastRender / 1000;
+		this.lastRenderTime = timestamp;
+
 		const canvas = this.#canvasRef.value;
 		if (!canvas) return;
 		const ctx = canvas.getContext("2d");
@@ -82,7 +95,6 @@ export class SimulationRenderer extends LitElement {
 		this.simulation.camera.scale = 2 ** this.scaleLevel;
 		this.robotController.camera.scale = 2 ** this.scaleLevel;
 
-		const t = 1 / 60;
 		ctx.clearRect(0, 0, clientWidth, clientHeight);
 
 		const splitX = clientWidth * 0.5;
