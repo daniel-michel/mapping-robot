@@ -1,12 +1,13 @@
 import { Vec } from "./math/vec";
-import { hashString } from "./pseudorandom";
+import { hashString } from "./math/pseudorandom.ts";
 import {
 	rotoTranslateCtx,
 	Camera,
 	interpolateCamera,
 	savedState,
 } from "./rendering";
-import { RangingSensorScan, SimulationRobot } from "./robot";
+import { RangingSensorScan } from "./robot/robot.ts";
+import { SimulationRobot } from "./robot/simulation-robot.ts";
 import { generateGraphWorld } from "./world-generation.ts";
 
 export class Simulation {

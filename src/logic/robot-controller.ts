@@ -8,7 +8,7 @@ import {
 	interpolateCamera,
 	savedState,
 } from "./rendering";
-import { calculateOdometry, Robot } from "./robot";
+import { calculateOdometry, Robot } from "./robot/robot.ts";
 import { Slam } from "./slam/slam.ts";
 import { sleep } from "./util";
 import { Grid } from "./data-structures/grid.ts";

@@ -1,5 +1,5 @@
 import { RotoTranslation } from "./math/roto-translation";
-import { interpolateAngle } from "./math/util";
+import { clamp, interpolateAngle, intToward } from "./math/util";
 import { Vec } from "./math/vec";
 
 export type Camera = {
@@ -33,12 +33,12 @@ export function interpolateCamera(
 	camera.transform.translation = Vec.interpolate(
 		camera.transform.translation,
 		target.translation,
-		Math.min(0.001 / time, 1)
+		intToward(time * 2 * camera.scale)
 	);
 	camera.transform.rotation = interpolateAngle(
 		camera.transform.rotation,
 		target.rotation,
-		Math.min(0.001 / time, 1)
+		intToward(time * 2 * clamp(camera.scale, [1, 10]))
 	);
 	return camera;
 }

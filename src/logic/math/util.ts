@@ -1,3 +1,5 @@
+export const DEG_TO_RAD = Math.PI / 180;
+
 export function clamp(value: number, [min, max]: [number, number]) {
 	return Math.min(Math.max(value, min), max);
 }
@@ -12,11 +14,11 @@ export function interpolate(
 	return first * (1 - interpolation) + second * interpolation;
 }
 /**
+ * Can be used to determine an amount of interpolation based on time such that doing one interpolation with a big time step will have the same result as two interpolations of smaller time steps that sum up to the same.
  * The result of this function is such that 1 - f(a + b) = (1 - f(a)) * (1 - f(b))
  */
 export function intToward(time: number) {
-	// 1 - f(a + b) = (1 - f(a)) * (1 - f(b))
-	return Math.exp(-time);
+	return 1 - Math.exp(-time);
 }
 export function interpolateAngle(
 	first: number,

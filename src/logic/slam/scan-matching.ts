@@ -9,7 +9,7 @@ import {
 import { RotoTranslation } from "../math/roto-translation.ts";
 import { angleDiff, angleNormalize } from "../math/util.ts";
 import { Vec } from "../math/vec.ts";
-import { RangingSensorScan } from "../robot.ts";
+import { RangingSensorScan } from "../robot/robot.ts";
 
 self.addEventListener("message", (e: MessageEvent) => {
 	switch (e.data.action) {

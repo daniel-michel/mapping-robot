@@ -1,6 +1,6 @@
 import { interpolate } from "./math/util.ts";
 import { Line, Vec } from "./math/vec.ts";
-import { createLcg } from "./pseudorandom.ts";
+import { createLcg } from "./math/pseudorandom.ts";
 import { World } from "./world.ts";
 
 export function generateFractalBoxWorld(seed: number) {

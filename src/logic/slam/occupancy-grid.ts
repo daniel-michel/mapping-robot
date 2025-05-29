@@ -1,7 +1,7 @@
 import { Grid } from "../data-structures/grid.ts";
 import { RotoTranslation } from "../math/roto-translation.ts";
 import { Vec } from "../math/vec.ts";
-import { RangingSensorScan } from "../robot.ts";
+import { RangingSensorScan } from "../robot/robot.ts";
 
 export type OccupancyProb = {
 	prob: number;

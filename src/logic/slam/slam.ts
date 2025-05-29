@@ -7,7 +7,7 @@ import {
 	OccupancyProbGrid,
 	toBinaryOccupancyGrid,
 } from "./occupancy-grid.ts";
-import { RangingSensorScan } from "../robot.ts";
+import { RangingSensorScan } from "../robot/robot.ts";
 import { asyncScanMatching } from "./scan-matching.ts";
 import { angleDiff } from "../math/util.ts";
 
