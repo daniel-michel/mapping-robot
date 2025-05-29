@@ -1,5 +1,5 @@
 import { Rect } from "../math/rect.ts";
-import { Vec2 } from "../math/vec.ts";
+import { Vec } from "../math/vec.ts";
 import { PriorityQueue } from "./priority-queue.ts";
 
 type LeafNode<T> = {
@@ -70,10 +70,7 @@ export class AABBTree<T> {
 		}
 	}
 
-	*raycast(
-		rayOrigin: Vec2,
-		rayDir: Vec2
-	): Generator<{ dist: number; value: T }> {
+	*raycast(rayOrigin: Vec, rayDir: Vec): Generator<{ dist: number; value: T }> {
 		type StackNode = { node: TreeNode<T>; t: number };
 		if (!this.root) return;
 		const stack = new PriorityQueue<StackNode>((a, b) => a.t - b.t);
@@ -101,8 +98,8 @@ export class AABBTree<T> {
 }
 
 function rayRectIntersection(
-	rayOrigin: Vec2,
-	rayDir: Vec2,
+	rayOrigin: Vec,
+	rayDir: Vec,
 	rect: Rect
 ): number | null {
 	// Slab method

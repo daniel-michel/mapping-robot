@@ -1,6 +1,6 @@
 import { RotoTranslation } from "./math/roto-translation";
 import { clamp } from "./math/util.ts";
-import { Vec2, Vec2Like } from "./math/vec";
+import { Vec } from "./math/vec";
 import { OccupancyBin, OccupancyProb } from "./slam/occupancy-grid.ts";
 import {
 	rotoTranslateCtx,
@@ -44,7 +44,7 @@ export class RobotController {
 		scale: 1,
 	};
 
-	highlightedCells: { coords: Vec2Like; lifetime: number }[] = [];
+	highlightedCells: { coord: Vec; lifetime: number }[] = [];
 
 	constructor(robot: Robot) {
 		this.robot = robot;
@@ -60,15 +60,12 @@ export class RobotController {
 				for (const cell of this.slam.occupancyGrids.explore.traverseOutward(
 					this.getCurrentRobotPose()
 						.translation.copy()
-						.div(this.slam.occupancyGridResolution).vec
+						.div(this.slam.occupancyGridResolution)
 				)) {
-					const dist = Vec2.distance(
-						Vec2.wrapped(cell.coords as Vec2Like),
-						start
-					);
+					const dist = Vec.distance(cell.coord, start);
 					const targetTime = startTime + dist * 50;
 					this.highlightedCells.push({
-						coords: cell.coords as Vec2Like,
+						coord: cell.coord,
 						lifetime: (Date.now() - targetTime) / 1_000,
 					});
 					this.highlightedCells;
@@ -298,7 +295,7 @@ export class RobotController {
 					const intensity = clamp(1 - cell.lifetime / CELL_LIFE_TIME, [0, 1]);
 					ctx.strokeStyle = `hsla(313, 100.00%, 65.70%, ${intensity})`;
 					saved(() => {
-						ctx.translate(cell.coords[0], cell.coords[1]);
+						ctx.translate(cell.coord.x, cell.coord.y);
 						ctx.lineWidth = clamp(0.2 * intensity, [0.01, 0.2]);
 						ctx.beginPath();
 						ctx.rect(-0.5, -0.5, 1, 1);
@@ -313,15 +310,15 @@ export class RobotController {
 			saved(() => {
 				const robotPos = this.getCurrentRobotPose().translation;
 				const closestCell = this.slam.occupancyGrids.explore.findClosest(
-					robotPos.copy().div(this.slam.occupancyGridResolution).vec,
+					robotPos.copy().div(this.slam.occupancyGridResolution),
 					(v) => v
 				);
 				if (!closestCell) {
 					return;
 				}
-				const closest = new Vec2(closestCell as [number, number]).mul(
-					this.slam.occupancyGridResolution
-				);
+				const closest = closestCell
+					.copy()
+					.mul(this.slam.occupancyGridResolution);
 
 				ctx.beginPath();
 				ctx.moveTo(robotPos.x, robotPos.y);

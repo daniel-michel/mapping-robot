@@ -1,7 +1,7 @@
 import { assertAlmostEquals } from "jsr:@std/assert";
 import { RotoTranslation } from "./roto-translation.ts";
-import { Vec2 } from "./vec.ts";
 import { angleNormalize } from "./util.ts";
+import { Vec } from "./vec.ts";
 
 export const assertAlmostEqualRotoTranslation = (
 	a: RotoTranslation,
@@ -32,7 +32,7 @@ Deno.test({
 	name: "roto-translation",
 	fn: async (t) => {
 		await t.step("inverse", () => {
-			const p = new Vec2([1, 2]);
+			const p = new Vec([1, 2]);
 			const transform = new RotoTranslation(Math.PI / 5, [1, 5]);
 			const transformed = transform.apply(p);
 			const inverse = transform.inverse();
@@ -63,7 +63,7 @@ Deno.test({
 		await t.step("matrix", () => {
 			const transform = new RotoTranslation(Math.PI / 5, [1, 5]);
 			const matrix = transform.matrix();
-			const p = new Vec2([1, 2]);
+			const p = new Vec([1, 2]);
 			const transformed = transform.apply(p);
 			const transformedWithMatrix = matrix.mulVec2(p);
 			assertAlmostEquals(

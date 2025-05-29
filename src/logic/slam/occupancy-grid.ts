@@ -1,6 +1,6 @@
 import { Grid } from "../data-structures/grid.ts";
 import { RotoTranslation } from "../math/roto-translation.ts";
-import { Vec2 } from "../math/vec.ts";
+import { Vec } from "../math/vec.ts";
 import { RangingSensorScan } from "../robot.ts";
 
 export type OccupancyProb = {
@@ -21,7 +21,7 @@ export function generateOccupancyGrid(
 ) {
 	const probabilityGrid = new Grid<OccupancyProb>(2);
 	for (const { scan, transform } of scans) {
-		const scanOrigin = transform.apply(new Vec2([0, 0])).freeze();
+		const scanOrigin = transform.apply(new Vec([0, 0])).freeze();
 		for (const { point } of scan.points) {
 			if (!point) {
 				continue;
@@ -33,7 +33,7 @@ export function generateOccupancyGrid(
 			).forEach((point, i) => {
 				const value = i === 0 ? 1 : 0;
 				const dilution =
-					0.5 + Vec2.distance(point, scanOrigin.copy().div(resolution)) * 0.05;
+					0.5 + Vec.distance(point, scanOrigin.copy().div(resolution)) * 0.05;
 				addToProbabilityGridDiluted(probabilityGrid, point, value, dilution);
 			});
 		}
@@ -58,7 +58,7 @@ export function toBinaryOccupancyGrid(
 
 function addToProbabilityGridDiluted(
 	probabilityGrid: OccupancyProbGrid,
-	point: Vec2,
+	point: Vec,
 	value: number,
 	radius: number
 ) {
@@ -68,7 +68,7 @@ function addToProbabilityGridDiluted(
 	const end = point.copy().add([offset, offset]);
 
 	// 1. Collect all weights and positions
-	const positions: { pos: Vec2; weight: number }[] = [];
+	const positions: { pos: Vec; weight: number }[] = [];
 	let totalWeight = 0;
 
 	for (let x = start.x; x <= end.x; x++) {
@@ -77,7 +77,7 @@ function addToProbabilityGridDiluted(
 			const yGaussian = gaussian(y, point.y, (radius + 0.1) * 0.7);
 			const weight = xGaussian * yGaussian;
 			if (weight < 0.01) continue;
-			const pos = new Vec2([x, y]);
+			const pos = new Vec([x, y]);
 			positions.push({ pos, weight });
 			totalWeight += weight;
 		}
@@ -100,23 +100,26 @@ function gaussian(x: number, mean: number, stddev: number): number {
 
 function addWeightedToProbabilityGrid(
 	probabilityGrid: OccupancyProbGrid,
-	point: Vec2,
+	point: Vec,
 	value: number,
 	weight: number
 ) {
-	const gridValue = probabilityGrid.get(point.vec) ?? { prob: 0, weight: 0 };
+	const gridValue = probabilityGrid.get(new Vec(point.vec)) ?? {
+		prob: 0,
+		weight: 0,
+	};
 	gridValue.weight += weight;
 	gridValue.prob =
 		(gridValue.prob * (gridValue.weight - weight) + value * weight) /
 		gridValue.weight;
-	probabilityGrid.set(gridValue, point.vec);
+	probabilityGrid.set(new Vec(point.vec), gridValue);
 	return gridValue;
 }
 
 /**
  * https://en.wikipedia.org/wiki/Bresenham's_line_algorithm
  */
-function* plotLine(v0: Vec2, v1: Vec2) {
+function* plotLine(v0: Vec, v1: Vec) {
 	if (Math.abs(v1.y - v0.y) < Math.abs(v1.x - v0.x)) {
 		yield* plotLineLow(v0, v1);
 	} else {
@@ -124,8 +127,8 @@ function* plotLine(v0: Vec2, v1: Vec2) {
 	}
 }
 
-function* plotLineLow(v0: Vec2, v1: Vec2) {
-	const d = Vec2.sub(v1, v0);
+function* plotLineLow(v0: Vec, v1: Vec) {
+	const d = Vec.sub(v1, v0);
 	const yi = d.y < 0 ? -1 : 1;
 	if (d.y < 0) {
 		d.y = -d.y;
@@ -137,7 +140,7 @@ function* plotLineLow(v0: Vec2, v1: Vec2) {
 	let y = v0.y;
 
 	for (const x of fromTo(v0.x, v1.x)) {
-		yield new Vec2([x, y]);
+		yield new Vec([x, y]);
 		if (D > 0) {
 			y = y + yi;
 			D = D + 2 * (d.y - d.x);
@@ -147,8 +150,8 @@ function* plotLineLow(v0: Vec2, v1: Vec2) {
 	}
 }
 
-function* plotLineHigh(v0: Vec2, v1: Vec2) {
-	const d = Vec2.sub(v1, v0);
+function* plotLineHigh(v0: Vec, v1: Vec) {
+	const d = Vec.sub(v1, v0);
 	const xi = d.x < 0 ? -1 : 1;
 	if (d.x < 0) {
 		d.x = -d.x;
@@ -160,7 +163,7 @@ function* plotLineHigh(v0: Vec2, v1: Vec2) {
 	let x = v0.x;
 
 	for (const y of fromTo(v0.y, v1.y)) {
-		yield new Vec2([x, y]);
+		yield new Vec([x, y]);
 		if (D > 0) {
 			x = x + xi;
 			D = D + 2 * (d.x - d.y);

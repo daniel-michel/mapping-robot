@@ -1,205 +1,12 @@
-export type VecArray = number[];
+import { assert } from "../assert.ts";
 
-export type Vec2Like = [x: number, y: number] | Vec2;
-export type Vec3Like = [x: number, y: number, z: number] | Vec3;
+export type VecLike = Vec | number[];
 
-export class Vec2 {
-	vec: [number, number];
+export class Vec {
+	vec: number[];
 
-	get [0](): number {
-		return this.vec[0];
-	}
-	get [1](): number {
-		return this.vec[1];
-	}
-	set [0](value: number) {
-		this.vec[0] = value;
-	}
-	set [1](value: number) {
-		this.vec[1] = value;
-	}
-
-	get x(): number {
-		return this.vec[0];
-	}
-	get y(): number {
-		return this.vec[1];
-	}
-	set x(value: number) {
-		this.vec[0] = value;
-	}
-	set y(value: number) {
-		this.vec[1] = value;
-	}
-
-	constructor(vec: [x: number, y: number]) {
+	constructor(vec: number[]) {
 		this.vec = vec;
-	}
-
-	copy() {
-		return new Vec2([this.x, this.y]);
-	}
-
-	freeze() {
-		Object.freeze(this.vec);
-		return Object.freeze(this);
-	}
-
-	set(vec: Vec2Like) {
-		this.x = vec[0];
-		this.y = vec[1];
-		return this;
-	}
-
-	add(other: Vec2Like) {
-		this.x += other[0];
-		this.y += other[1];
-		return this;
-	}
-	sub(other: Vec2Like) {
-		this.x -= other[0];
-		this.y -= other[1];
-		return this;
-	}
-	mul(s: number) {
-		this.x *= s;
-		this.y *= s;
-		return this;
-	}
-	div(s: number) {
-		this.x /= s;
-		this.y /= s;
-		return this;
-	}
-	normalize() {
-		const length = this.magnitude();
-		if (length !== 0) {
-			this.x /= length;
-			this.y /= length;
-		}
-		return this;
-	}
-	magnitude() {
-		return Math.sqrt(this.x * this.x + this.y * this.y);
-	}
-	magnitudeSquared() {
-		return this.x * this.x + this.y * this.y;
-	}
-	/**
-	 * Counter-clockwise angle from the x-axis
-	 * (if the x-axis is pointing to the right and the y-axis is pointing up)
-	 */
-	heading() {
-		return Math.atan2(this.y, this.x);
-	}
-
-	rotate(angle: number) {
-		const cos = Math.cos(angle);
-		const sin = Math.sin(angle);
-		const x = this.x * cos - this.y * sin;
-		const y = this.x * sin + this.y * cos;
-		this.x = x;
-		this.y = y;
-		return this;
-	}
-
-	toString() {
-		return `(${this.x}, ${this.y})`;
-	}
-
-	*[Symbol.iterator]() {
-		yield this.x;
-		yield this.y;
-	}
-
-	static wrapped(vec: Vec2Like) {
-		if (vec instanceof Vec2) {
-			return vec;
-		}
-		return new Vec2(vec);
-	}
-	static unwrapped(vec: Vec2Like) {
-		if (vec instanceof Vec2) {
-			return vec.vec;
-		}
-		return vec;
-	}
-	static allWrapped<T extends Vec2Like[]>(...vecs: T) {
-		return vecs.map((vec) => Vec2.wrapped(vec)) as {
-			[K in keyof T]: Vec2;
-		};
-	}
-	static from(vec: Vec2Like) {
-		return new Vec2([vec[0], vec[1]]);
-	}
-	static fromAngle(angle: number) {
-		return new Vec2([Math.cos(angle), Math.sin(angle)]);
-	}
-	static add(a: Vec2Like, b: Vec2Like) {
-		return new Vec2([a[0] + b[0], a[1] + b[1]]);
-	}
-	static sub(a: Vec2Like, b: Vec2Like) {
-		return new Vec2([a[0] - b[0], a[1] - b[1]]);
-	}
-	static mul(a: Vec2Like, s: number) {
-		return new Vec2([a[0] * s, a[1] * s]);
-	}
-	static mulElementWise(a: Vec2Like, b: Vec2Like) {
-		return new Vec2([a[0] * b[0], a[1] * b[1]]);
-	}
-	static div(a: Vec2Like, s: number) {
-		return new Vec2([a[0] / s, a[1] / s]);
-	}
-	static normalize(a: Vec2Like) {
-		const length = Math.sqrt(a[0] * a[0] + a[1] * a[1]);
-		if (length !== 0) {
-			return new Vec2([a[0] / length, a[1] / length]);
-		}
-		return new Vec2([0, 0]);
-	}
-	static dot(a: Vec2Like, b: Vec2Like) {
-		return a[0] * b[0] + a[1] * b[1];
-	}
-	static cross(a: Vec2Like, b: Vec2Like) {
-		return a[0] * b[1] - a[1] * b[0];
-	}
-	static magnitude(a: Vec2Like) {
-		return Math.sqrt(a[0] * a[0] + a[1] * a[1]);
-	}
-	static magnitudeSquared(a: Vec2Like) {
-		return a[0] * a[0] + a[1] * a[1];
-	}
-	static distance(a: Vec2Like, b: Vec2Like) {
-		return Vec2.sub(a, b).magnitude();
-	}
-	static distanceSquared(a: Vec2Like, b: Vec2Like) {
-		return Vec2.sub(a, b).magnitudeSquared();
-	}
-	static interpolate(a: Vec2Like, b: Vec2Like, t: number) {
-		return new Vec2([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
-	}
-}
-
-export class Vec3 {
-	vec: [number, number, number];
-
-	get [0](): number {
-		return this.vec[0];
-	}
-	get [1](): number {
-		return this.vec[1];
-	}
-	get [2](): number {
-		return this.vec[2];
-	}
-	set [0](value: number) {
-		this.vec[0] = value;
-	}
-	set [1](value: number) {
-		this.vec[1] = value;
-	}
-	set [2](value: number) {
-		this.vec[2] = value;
 	}
 
 	get x(): number {
@@ -211,6 +18,9 @@ export class Vec3 {
 	get z(): number {
 		return this.vec[2];
 	}
+	get w(): number {
+		return this.vec[3];
+	}
 	set x(value: number) {
 		this.vec[0] = value;
 	}
@@ -220,41 +30,310 @@ export class Vec3 {
 	set z(value: number) {
 		this.vec[2] = value;
 	}
+	set w(value: number) {
+		this.vec[3] = value;
+	}
 
-	constructor(vec: [x: number, y: number, z: number]) {
-		this.vec = vec;
+	get dimensions(): number {
+		return this.vec.length;
+	}
+
+	at(index: number): number {
+		assert(
+			index >= -this.vec.length && index < this.vec.length,
+			"Index out of bounds"
+		);
+		if (index < 0) {
+			index += this.vec.length; // Allow negative indexing
+		}
+		return this.vec[index];
 	}
 
 	copy() {
-		return new Vec3([this.x, this.y, this.z]);
+		return new Vec(this.vec.slice());
 	}
 
-	*[Symbol.iterator]() {
-		yield this.x;
-		yield this.y;
-		yield this.z;
+	freeze() {
+		Object.freeze(this.vec);
+		return Object.freeze(this);
+	}
+	set(vec: VecLike) {
+		const arr = Vec.unwrapped(vec);
+		assert(arr.length === this.vec.length);
+		for (let i = 0; i < this.vec.length; i++) {
+			this.vec[i] = arr[i];
+		}
+	}
+	add(other: number | VecLike) {
+		if (typeof other === "number") {
+			for (let i = 0; i < this.vec.length; i++) {
+				this.vec[i] += other;
+			}
+			return this;
+		} else {
+			const arr = Vec.unwrapped(other);
+			assert(arr.length === this.vec.length);
+			for (let i = 0; i < this.vec.length; i++) {
+				this.vec[i] += arr[i];
+			}
+			return this;
+		}
+	}
+	sub(other: number | VecLike) {
+		if (typeof other === "number") {
+			for (let i = 0; i < this.vec.length; i++) {
+				this.vec[i] -= other;
+			}
+			return this;
+		} else {
+			const arr = Vec.unwrapped(other);
+			assert(arr.length === this.vec.length);
+			for (let i = 0; i < this.vec.length; i++) {
+				this.vec[i] -= arr[i];
+			}
+			return this;
+		}
+	}
+	mul(s: number | VecLike) {
+		if (typeof s === "number") {
+			for (let i = 0; i < this.vec.length; i++) {
+				this.vec[i] *= s;
+			}
+		} else {
+			const arr = Vec.unwrapped(s);
+			assert(arr.length === this.vec.length);
+			for (let i = 0; i < this.vec.length; i++) {
+				this.vec[i] *= arr[i];
+			}
+		}
+		return this;
+	}
+	div(s: number | VecLike) {
+		if (typeof s === "number") {
+			for (let i = 0; i < this.vec.length; i++) {
+				this.vec[i] /= s;
+			}
+		} else {
+			const arr = Vec.unwrapped(s);
+			assert(arr.length === this.vec.length);
+			for (let i = 0; i < this.vec.length; i++) {
+				this.vec[i] /= arr[i];
+			}
+		}
+		return this;
+	}
+	modify(fn: (value: number, index: number) => number) {
+		for (let i = 0; i < this.vec.length; i++) {
+			this.vec[i] = fn(this.vec[i], i);
+		}
+		return this;
+	}
+	toMapped(fn: (value: number, index: number) => number): Vec {
+		return new Vec(this.vec.map(fn));
+	}
+	normalize() {
+		const length = this.magnitude();
+		if (length !== 0) {
+			this.mul(1 / length);
+		}
+		return this;
+	}
+	magnitude() {
+		return Math.sqrt(this.magnitudeSquared());
+	}
+	magnitudeSquared() {
+		let sum = 0;
+		for (let i = 0; i < this.vec.length; i++) {
+			sum += this.vec[i] * this.vec[i];
+		}
+		return sum;
+	}
+	round() {
+		for (let i = 0; i < this.vec.length; i++) {
+			this.vec[i] = Math.round(this.vec[i]);
+		}
+		return this;
+	}
+	floor() {
+		for (let i = 0; i < this.vec.length; i++) {
+			this.vec[i] = Math.floor(this.vec[i]);
+		}
+		return this;
+	}
+	ceil() {
+		for (let i = 0; i < this.vec.length; i++) {
+			this.vec[i] = Math.ceil(this.vec[i]);
+		}
+		return this;
+	}
+	min(other: number | VecLike) {
+		if (typeof other === "number") {
+			for (let i = 0; i < this.vec.length; i++) {
+				this.vec[i] = Math.min(this.vec[i], other);
+			}
+		} else {
+			const arr = Vec.unwrapped(other);
+			assert(arr.length === this.vec.length);
+			for (let i = 0; i < this.vec.length; i++) {
+				this.vec[i] = Math.min(this.vec[i], arr[i]);
+			}
+		}
+		return this;
+	}
+	max(other: number | VecLike) {
+		if (typeof other === "number") {
+			for (let i = 0; i < this.vec.length; i++) {
+				this.vec[i] = Math.max(this.vec[i], other);
+			}
+		} else {
+			const arr = Vec.unwrapped(other);
+			assert(arr.length === this.vec.length);
+			for (let i = 0; i < this.vec.length; i++) {
+				this.vec[i] = Math.max(this.vec[i], arr[i]);
+			}
+		}
+		return this;
+	}
+	clamp(min: number | Vec, max: number | Vec) {
+		return this.min(max).max(min);
+	}
+	/**
+	 * Counter-clockwise angle from the x-axis
+	 * (if the x-axis is pointing to the right and the y-axis is pointing up)
+	 */
+	heading2d() {
+		assert(this.vec.length >= 2);
+		return Math.atan2(this.y, this.x);
+	}
+	rotate2d(angle: number) {
+		assert(this.vec.length >= 2);
+		const cos = Math.cos(angle);
+		const sin = Math.sin(angle);
+		const x = this.x * cos - this.y * sin;
+		this.y = this.x * sin + this.y * cos;
+		this.x = x;
+		return this;
 	}
 
-	static wrapped(vec: Vec3Like) {
-		if (vec instanceof Vec3) {
+	toString() {
+		return `(${this.vec.join(", ")})`;
+	}
+
+	iter() {
+		return this[Symbol.iterator]();
+	}
+
+	*[Symbol.iterator](): Generator<number, void, void> {
+		for (const value of this.vec) {
+			yield value;
+		}
+	}
+
+	static wrapped(vec: VecLike): Vec {
+		if (vec instanceof Vec) {
 			return vec;
 		}
-		return new Vec3(vec);
+		return new Vec(vec);
 	}
-	static unwrapped(vec: Vec3Like) {
-		if (vec instanceof Vec3) {
+	static unwrapped(vec: VecLike): number[] {
+		if (vec instanceof Vec) {
 			return vec.vec;
 		}
 		return vec;
 	}
+	static unwrappedCopy(vec: VecLike): number[] {
+		if (vec instanceof Vec) {
+			return vec.vec.slice();
+		}
+		return vec.slice();
+	}
+	static allWrapped<T extends VecLike[]>(
+		...vecs: T
+	): {
+		[K in keyof T]: Vec;
+	} {
+		return vecs.map((vec) => Vec.wrapped(vec)) as {
+			[K in keyof T]: Vec;
+		};
+	}
+	static from(vec: VecLike) {
+		return new Vec(Vec.unwrappedCopy(vec));
+	}
+	static zero(dimensions: number) {
+		return new Vec(new Array(dimensions).fill(0));
+	}
+	static fromAngle2d(angle: number) {
+		return new Vec([Math.cos(angle), Math.sin(angle)]);
+	}
+	static add(a: VecLike, b: VecLike) {
+		return new Vec(Vec.unwrapped(a).map((v, i) => v + Vec.unwrapped(b)[i]));
+	}
+	static sub(a: VecLike, b: VecLike) {
+		return new Vec(Vec.unwrapped(a).map((v, i) => v - Vec.unwrapped(b)[i]));
+	}
+	static mul(a: VecLike, s: number | VecLike) {
+		if (typeof s === "number") {
+			return new Vec(Vec.unwrapped(a).map((v) => v * s));
+		} else {
+			const arr = Vec.unwrapped(s);
+			assert(arr.length === Vec.unwrapped(a).length);
+			return new Vec(Vec.unwrapped(a).map((v, i) => v * arr[i]));
+		}
+	}
+	static div(a: VecLike, s: number | VecLike) {
+		if (typeof s === "number") {
+			return new Vec(Vec.unwrapped(a).map((v) => v / s));
+		} else {
+			const arr = Vec.unwrapped(s);
+			assert(arr.length === Vec.unwrapped(a).length);
+			return new Vec(Vec.unwrapped(a).map((v, i) => v / arr[i]));
+		}
+	}
+	static normalize(a: VecLike) {
+		const length = Vec.magnitude(a);
+		if (length !== 0) {
+			return Vec.mul(a, 1 / length);
+		}
+		return new Vec(Vec.unwrapped(a).map(() => 0));
+	}
+	static magnitude(a: VecLike) {
+		return Math.sqrt(Vec.magnitudeSquared(a));
+	}
+	static magnitudeSquared(a: VecLike) {
+		return Vec.unwrapped(a).reduce((sum, v) => sum + v * v, 0);
+	}
+	static distance(a: VecLike, b: VecLike) {
+		return Vec.sub(a, b).magnitude();
+	}
+	static distanceSquared(a: VecLike, b: VecLike) {
+		return Vec.sub(a, b).magnitudeSquared();
+	}
+	static interpolate(a: VecLike, b: VecLike, t: number) {
+		const arrA = Vec.unwrapped(a);
+		const arrB = Vec.unwrapped(b);
+		assert(arrA.length === arrB.length);
+		return new Vec(arrA.map((v, i) => v + (arrB[i] - v) * t));
+	}
+	static dot(a: VecLike, b: VecLike) {
+		const arrA = Vec.unwrapped(a);
+		const arrB = Vec.unwrapped(b);
+		assert(arrA.length === arrB.length);
+		return arrA.reduce((sum, v, i) => sum + v * arrB[i], 0);
+	}
+	static cross2d(a: VecLike, b: VecLike) {
+		assert(Vec.unwrapped(a).length >= 2 && Vec.unwrapped(b).length >= 2);
+		const [ax, ay] = a;
+		const [bx, by] = b;
+		return ax * by - ay * bx;
+	}
 }
 
-export type Line = [Vec2Like, Vec2Like];
-export type Ray = [origin: Vec2Like, direction: Vec2Like];
+export type Line = [Vec, Vec];
+export type Ray = [origin: Vec, direction: Vec];
 
 export type LineIntersectionResult = {
 	intersecting: boolean;
-	intersection: Vec2;
+	intersection: Vec;
 	/** Where on the line a the intersection is */
 	t: number;
 	/** Where on the line b the intersection is */
@@ -270,7 +349,7 @@ export function lineLineIntersection(
 	a: Line,
 	b: Line
 ): LineIntersectionResult | null {
-	const [as, ae, bs, be] = Vec2.allWrapped(a[0], a[1], b[0], b[1]);
+	const [as, ae, bs, be] = Vec.allWrapped(a[0], a[1], b[0], b[1]);
 	const divisor = (as.x - ae.x) * (bs.y - be.y) - (as.y - ae.y) * (bs.x - be.x);
 	if (divisor === 0) {
 		return null; // Lines are parallel
@@ -280,7 +359,7 @@ export function lineLineIntersection(
 	const u =
 		-((as.x - ae.x) * (as.y - bs.y) - (as.y - ae.y) * (as.x - bs.x)) / divisor;
 	const intersecting = t >= 0 && t <= 1 && u >= 0 && u <= 1;
-	const intersection = Vec2.add(as, Vec2.sub(ae, as).mul(t));
+	const intersection = Vec.add(as, Vec.sub(ae, as).mul(t));
 	return {
 		intersecting,
 		intersection,
@@ -295,9 +374,9 @@ export function rayLineIntersection(
 	ray: Ray,
 	line: Line
 ): RayLineIntersectionResult | null {
-	const direction = Vec2.wrapped(ray[1]).copy().normalize();
+	const direction = Vec.wrapped(ray[1]).copy().normalize();
 	const intersection = lineLineIntersection(
-		[ray[0], Vec2.add(ray[0], direction)],
+		[ray[0], Vec.add(ray[0], direction)],
 		line
 	);
 	if (intersection === null) {

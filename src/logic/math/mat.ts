@@ -1,4 +1,4 @@
-import { Vec2, Vec2Like, VecArray } from "./vec.ts";
+import { Vec, VecLike } from "./vec.ts";
 
 export type MatArray = number[][];
 
@@ -63,10 +63,10 @@ export class Mat2 {
 		return new Mat2(result as Mat2Array);
 	}
 
-	mulVec2(point: Vec2) {
+	mulVec2(point: Vec) {
 		const x = this.m00 * point.x + this.m01 * point.y;
 		const y = this.m10 * point.x + this.m11 * point.y;
-		return new Vec2([x, y]);
+		return new Vec([x, y]);
 	}
 
 	static wrapped(mat: Mat2Like) {
@@ -194,10 +194,10 @@ export class Mat3 {
 		return new Mat3(result as Mat3Array);
 	}
 
-	mulVec2(point: Readonly<Vec2>) {
+	mulVec2(point: Readonly<Vec>) {
 		const x = this.m00 * point.x + this.m01 * point.y + this.m02;
 		const y = this.m10 * point.x + this.m11 * point.y + this.m12;
-		return new Vec2([x, y]);
+		return new Vec([x, y]);
 	}
 
 	static wrapped(mat: Mat3Like) {
@@ -242,17 +242,19 @@ export class Mat3 {
 			[0, 0, 1],
 		]);
 	}
-	static scale(vec: Vec2Like) {
+	static scale(vec: VecLike) {
+		const raw = Vec.unwrapped(vec);
 		return new Mat3([
-			[vec[0], 0, 0],
-			[0, vec[1], 0],
+			[raw[0], 0, 0],
+			[0, raw[1], 0],
 			[0, 0, 1],
 		]);
 	}
-	static translate(vec: Vec2Like) {
+	static translate(vec: VecLike) {
+		const raw = Vec.unwrapped(vec);
 		return new Mat3([
-			[1, 0, vec[0]],
-			[0, 1, vec[1]],
+			[1, 0, raw[0]],
+			[0, 1, raw[1]],
 			[0, 0, 1],
 		]);
 	}
@@ -274,13 +276,13 @@ export function mulMatArray(a: MatArray, b: MatArray): MatArray {
 	}
 	return result;
 }
-export function mulVecMatArray(vec: VecArray, mat: MatArray): VecArray {
+export function mulVecMatArray(vec: number[], mat: MatArray): number[] {
 	if (vec.length !== mat.length) {
 		throw new Error(
 			"Matrix and vector dimensions do not match for multiplication"
 		);
 	}
-	const result: VecArray = [];
+	const result: number[] = [];
 	for (let i = 0; i < vec.length; i++) {
 		result[i] = 0;
 		for (let j = 0; j < mat[0].length; j++) {

@@ -1,6 +1,6 @@
 import { RotoTranslation } from "./math/roto-translation.ts";
 import { mod, random } from "./math/util.ts";
-import { Ray, Vec2 } from "./math/vec.ts";
+import { Ray, Vec } from "./math/vec.ts";
 import { sleep } from "./util.ts";
 import { World } from "./world.ts";
 
@@ -34,7 +34,7 @@ export type RangingSensorScan = {
 		angle: number;
 		distance: number;
 		/** A point in the reference frame of the measurement, the center of the measurement region is along the positive y axis. */
-		point: Readonly<Vec2> | null;
+		point: Readonly<Vec> | null;
 	}[];
 };
 
@@ -59,7 +59,7 @@ export class SimulationRobot implements Robot {
 		refreshTime: 1 / 50,
 	};
 
-	positionHistory: Vec2[] = [];
+	positionHistory: Vec[] = [];
 
 	constructor(wheelBase: number, wheelRadius: number, world: World) {
 		this.wheelBase = wheelBase;
@@ -79,10 +79,10 @@ export class SimulationRobot implements Robot {
 		const points: RangingSensorScan["points"] = this.rangingRays()
 			.map(({ ray, angle }) => {
 				const rotatedRay: Ray = [
-					Vec2.wrapped(ray[0]).copy(),
-					Vec2.wrapped(ray[1])
+					Vec.wrapped(ray[0]).copy(),
+					Vec.wrapped(ray[1])
 						.copy()
-						.rotate(random([-1, 1]) * this.rangingSensor.angularAccuracy),
+						.rotate2d(random([-1, 1]) * this.rangingSensor.angularAccuracy),
 				];
 				const result = this.world.castRay(rotatedRay);
 				if (result !== null) {
@@ -105,7 +105,7 @@ export class SimulationRobot implements Robot {
 					distance,
 					point:
 						distance >= 0
-							? new Vec2([0, 1]).rotate(angle).mul(distance).freeze()
+							? new Vec([0, 1]).rotate2d(angle).mul(distance).freeze()
 							: null,
 				};
 			})
@@ -128,7 +128,7 @@ export class SimulationRobot implements Robot {
 		const { count: stepCount, size: angleStep } = this.#rangingSensorSteps;
 		for (let i = 0; i < stepCount; i++) {
 			const angle = (i - (stepCount - 1) / 2) * angleStep;
-			const direction = new Vec2([0, 1]).rotate(
+			const direction = new Vec([0, 1]).rotate2d(
 				this.transform.rotation + angle
 			);
 			const ray: Ray = [this.transform.translation.copy(), direction];
@@ -174,7 +174,7 @@ export class SimulationRobot implements Robot {
 					right * t,
 					this.wheelBase
 				);
-				const absoluteMovement = translation.rotate(originalOrientation);
+				const absoluteMovement = translation.rotate2d(originalOrientation);
 				this.transform.rotation = originalOrientation + rotation;
 				this.transform.rotation = mod(this.transform.rotation, Math.PI * 2);
 				this.transform.translation = originalPosition
@@ -189,7 +189,7 @@ export class SimulationRobot implements Robot {
 			right,
 			this.wheelBase
 		);
-		const absoluteMovement = translation.rotate(originalOrientation);
+		const absoluteMovement = translation.rotate2d(originalOrientation);
 		this.transform.rotation = originalOrientation + rotation;
 		this.transform.rotation = mod(this.transform.rotation, Math.PI * 2);
 		this.transform.translation = originalPosition.copy().add(absoluteMovement);

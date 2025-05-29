@@ -1,6 +1,6 @@
 import { Grid } from "../data-structures/grid.ts";
 import { RotoTranslation } from "../math/roto-translation.ts";
-import { Vec2 } from "../math/vec.ts";
+import { Vec } from "../math/vec.ts";
 import {
 	generateOccupancyGrid,
 	OccupancyGrid,
@@ -119,7 +119,7 @@ export class PoseGraph {
 	}
 }
 
-export type Surface = Vec2[];
+export type Surface = Vec[];
 
 export class Slam {
 	poseGraph = new PoseGraph();
@@ -170,7 +170,7 @@ export class Slam {
 			} else {
 				const last = current.at(-1);
 				if (last) {
-					const dist = Vec2.distance(last, points[i]);
+					const dist = Vec.distance(last, points[i]);
 					if (dist < this.#surfaceThreshold) {
 						current.push(points[i]);
 					} else {
@@ -198,7 +198,7 @@ export class Slam {
 			}
 			return (
 				1 / expectedOverlap ** 2 +
-				Vec2.distanceSquared(transform.translation, currentPose.translation) *
+				Vec.distanceSquared(transform.translation, currentPose.translation) *
 					0.002
 			);
 		};
@@ -235,13 +235,13 @@ export class Slam {
 		const angle = scan.angle;
 		const inverseTransform = transform.inverse();
 		const transMat = inverseTransform.matrix();
-		const scanOrigin = transMat.mulVec2(new Vec2([0, 0]));
+		const scanOrigin = transMat.mulVec2(new Vec([0, 0]));
 		const pointsWithinNewScan = scan.points.filter(({ point }) => {
 			if (!point) {
 				return false;
 			}
 			const transformedPoint = transMat.mulVec2(point);
-			const rayDirectionSimilarity = Vec2.dot(
+			const rayDirectionSimilarity = Vec.dot(
 				transformedPoint.copy().mul(-1).normalize(),
 				scanOrigin.copy().sub(transformedPoint).normalize()
 			);
@@ -252,7 +252,7 @@ export class Slam {
 				return false;
 			}
 			if (
-				Math.abs(angleDiff(transformedPoint.heading(), Math.PI / 2)) >
+				Math.abs(angleDiff(transformedPoint.heading2d(), Math.PI / 2)) >
 				angle / 2
 			) {
 				return false;
@@ -282,9 +282,9 @@ export class Slam {
 				}
 				for (const d of [0, 1]) {
 					for (const o of [-1, 1]) {
-						const coords = [0, 0];
-						coords[d] = o;
-						const neighbor = getNeighbor(coords);
+						const coord = [0, 0];
+						coord[d] = o;
+						const neighbor = getNeighbor(coord);
 						if (neighbor === undefined) {
 							return true;
 						}

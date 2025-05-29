@@ -1,4 +1,4 @@
-import { Vec2 } from "./math/vec";
+import { Vec } from "./math/vec";
 import { hashString } from "./pseudorandom";
 import {
 	rotoTranslateCtx,
@@ -18,7 +18,7 @@ export class Simulation {
 	};
 	scan?: RangingSensorScan;
 
-	render(ctx: CanvasRenderingContext2D, size: Vec2, t: number) {
+	render(ctx: CanvasRenderingContext2D, size: Vec, t: number) {
 		this.scan = this.robot.syncScan();
 		interpolateCamera(this.camera, this.robot.transform, t);
 		const saved = savedState(ctx);
@@ -31,8 +31,8 @@ export class Simulation {
 
 				for (const wall of this.world.walls) {
 					ctx.beginPath();
-					ctx.moveTo(wall[0][0], wall[0][1]);
-					ctx.lineTo(wall[1][0], wall[1][1]);
+					ctx.moveTo(wall[0].x, wall[0].y);
+					ctx.lineTo(wall[1].x, wall[1].y);
 					ctx.strokeStyle = "#fff";
 					ctx.lineWidth = 1;
 					ctx.stroke();
@@ -54,8 +54,8 @@ export class Simulation {
 							const length = point.distance >= 0 ? point.distance : 10;
 							ctx.beginPath();
 							ctx.moveTo(0, 0);
-							const hitPoint = new Vec2([0, 1])
-								.rotate(this.scan.angleStep * i - this.scan.angle / 2)
+							const hitPoint = new Vec([0, 1])
+								.rotate2d(this.scan.angleStep * i - this.scan.angle / 2)
 								.mul(length);
 							ctx.lineTo(hitPoint.x, hitPoint.y);
 							ctx.strokeStyle = point.distance >= 0 ? "#2493" : "#f003";
@@ -65,8 +65,8 @@ export class Simulation {
 						for (let i = 0; i < this.scan.count; i++) {
 							const point = this.scan.points[i];
 							const length = point.distance >= 0 ? point.distance : 10;
-							const hitPoint = new Vec2([0, 1])
-								.rotate(this.scan.angleStep * i - this.scan.angle / 2)
+							const hitPoint = new Vec([0, 1])
+								.rotate2d(this.scan.angleStep * i - this.scan.angle / 2)
 								.mul(length);
 							if (point.distance >= 0) {
 								ctx.beginPath();

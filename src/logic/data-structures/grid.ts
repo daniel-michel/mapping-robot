@@ -1,4 +1,4 @@
-import { clamp } from "../math/util.ts";
+import { Vec } from "../math/vec.ts";
 import { PriorityQueue } from "./priority-queue.ts";
 
 export class Grid<T> {
@@ -48,42 +48,42 @@ export class Grid<T> {
 		};
 	}
 
-	set(value: T, coordinates: number[]) {
-		const cell = this.getCell(coordinates);
+	set(coord: Vec, value: T) {
+		const cell = this.getCell(coord);
 		cell.#unify(value);
-		this.simplifyCell(coordinates);
+		this.simplifyCell(coord);
 	}
-	clear(coordinates: number[]) {
-		const cell = this.getCell(coordinates);
+	clear(coord: Vec) {
+		const cell = this.getCell(coord);
 		cell.#unify(undefined);
-		this.simplifyCell(coordinates);
+		this.simplifyCell(coord);
 	}
-	get(coordinates: number[]): T | undefined {
-		const relativeCoordinates = this.#toRelativeCoordinates(coordinates);
-		const childIndex = calculateCoordinateIndex(relativeCoordinates);
-		if (relativeCoordinates.some((coord) => Math.abs(coord) > 1)) {
+	get(coord: Vec): T | undefined {
+		const relativeCoord = this.#toRelativeCoordinate(coord);
+		const childIndex = calculateCoordinateIndex(relativeCoord);
+		if (relativeCoord.iter().some((coord) => Math.abs(coord) > 1)) {
 			return undefined;
 		} else if (this.children.leaf) {
 			return this.children.value;
 		} else {
 			return this.children.nodes[childIndex]?.get(
-				this.#subtractRelativeCoordinates(coordinates, relativeCoordinates)
+				this.#subtractRelativeCoordinate(coord, relativeCoord)
 			);
 		}
 	}
 
 	findClosest(
-		coordinates: number[],
+		coord: Vec,
 		predicate: (value: T) => boolean,
 		options?: { minDistance?: number; maxDistance?: number }
-	): number[] | undefined {
-		const found = this.traverseOutward(coordinates, options).find(
+	): Vec | undefined {
+		const found = this.traverseOutward(coord, options).find(
 			({ cell }) =>
 				cell.children.leaf &&
 				cell.children.value !== undefined &&
 				predicate(cell.children.value)
 		);
-		return found?.coords;
+		return found?.coord;
 	}
 
 	map<U>(fn: (value: T) => U | undefined): Grid<U> {
@@ -119,24 +119,23 @@ export class Grid<T> {
 		) => U | undefined
 	): Grid<U> {
 		const newGrid = new Grid<U>(this.dimensions, this.level);
-		for (const { node, coords } of this.traverseLeafs()) {
+		for (const { node, coord } of this.traverseLeafs()) {
 			// if the node is not at level zero (a single grid tile) all single grid tiles need to be iterated
 			const size = 3 ** node.level;
 			const centerOffset = Math.floor(size / 2);
 			const count = size ** this.dimensions;
 			for (let i = 0; i < count; i++) {
 				// since calculateIndexCoordinate starts at -1, 1 has to be added again
-				const offset = calculateIndexCoordinate(i, this.dimensions).map(
+				const offset = calculateIndexCoordinate(i, this.dimensions).toMapped(
 					(c) => c + 1 - centerOffset
 				);
-				// TODO refactor with Vec(N) class
-				const currentCoords = coords.map((c, i) => c + offset[i]);
+				const currentCoord = coord.toMapped((c, i) => c + offset.at(i));
 				const newValue = fn(node.children.value, (offset: number[]) => {
-					const neighborCoords = currentCoords.map((c, i) => c + offset[i]);
-					return this.get(neighborCoords);
+					const neighborCoord = currentCoord.toMapped((c, i) => c + offset[i]);
+					return this.get(neighborCoord);
 				});
 				if (newValue !== undefined) {
-					newGrid.set(newValue, currentCoords);
+					newGrid.set(currentCoord, newValue);
 				}
 			}
 		}
@@ -145,11 +144,14 @@ export class Grid<T> {
 
 	*traverseLeafs(): Generator<{
 		node: Grid<T> & { children: { leaf: true; value: T } };
-		coords: number[];
+		coord: Vec;
 	}> {
 		if (this.children.leaf) {
 			if (this.children.value !== undefined) {
-				yield { node: this as any, coords: new Array(this.dimensions).fill(0) };
+				yield {
+					node: this as any,
+					coord: Vec.zero(this.dimensions),
+				};
 			}
 		} else {
 			for (let i = 0; i < this.children.nodes.length; i++) {
@@ -157,93 +159,89 @@ export class Grid<T> {
 				if (!child) {
 					continue;
 				}
-				const relativeCoords = this.#relativeOffsetToAbsolute(
+				const relativeCoord = this.#relativeOffsetToAbsolute(
 					calculateIndexCoordinate(i, this.dimensions)
 				);
 				yield* child.traverseLeafs().map((leaf) => ({
 					...leaf,
-					coords: leaf.coords.map((c, j) => c + relativeCoords[j]),
+					coord: leaf.coord.toMapped((c, j) => c + relativeCoord.at(j)),
 				}));
 			}
 		}
 	}
 
 	*traverseOutward(
-		coordinates: number[],
+		coord: Vec,
 		options?: { minDistance?: number; maxDistance?: number }
-	): Generator<{ coords: number[]; level: number; cell: Grid<T> }> {
+	): Generator<{ coord: Vec; level: number; cell: Grid<T> }> {
 		const { minDistance = 0, maxDistance = Infinity } = options ?? {};
 		const visited = new Set<Grid<T>>();
-		const start = coordinates.slice();
-
-		function euclidean(a: number[], b: number[]): number {
-			return Math.sqrt(a.reduce((sum, ai, i) => sum + (ai - b[i]) ** 2, 0));
-		}
+		const start = coord.copy();
 
 		const queue = new PriorityQueue<{
-			coords: number[];
+			coord: Vec;
 			dist: number;
 			level: number;
 		}>((a, b) => a.dist - b.dist);
 		queue.insert({
-			coords: start.map((v) => Math.round(v)),
+			coord: start.copy().round(),
 			dist: 0,
 			level: this.level,
 		});
 
 		while (queue.length > 0) {
-			const { coords, dist } = queue.pop()!;
+			const { coord, dist } = queue.pop()!;
 			if (dist > maxDistance) continue;
-			const result = this.getCellContaining(coords);
+			const result = this.getCellContaining(coord);
 			if (!result) continue;
-			const { cell, coordinates: offsetFromCellCenter } = result;
+			const { cell, coord: offsetFromCellCenter } = result;
 			if (visited.has(cell)) continue;
 			visited.add(cell);
 			const level = cell.level;
 
 			if (dist >= minDistance) {
-				yield { coords, level, cell };
+				yield { coord, level, cell };
 			}
 
 			// Generate neighbors in all directions just over the edge of the current cell
 			for (let d = 0; d < this.dimensions; d++) {
 				for (const delta of [-1, 1]) {
-					const neighbor = coords.slice();
-					neighbor[d] +=
+					const neighbor = coord.copy();
+					neighbor.vec[d] +=
 						delta * (level > 0 ? Math.round(3 ** level * 0.5 + 0.5) : 1) -
-						offsetFromCellCenter[d];
-					const neighborDist = euclidean(neighbor, start);
+						offsetFromCellCenter.at(d);
+					const neighborDist = Vec.distance(neighbor, start);
 					if (neighborDist > maxDistance) continue;
-					queue.insert({ coords: neighbor, dist: neighborDist, level });
+					queue.insert({ coord: neighbor, dist: neighborDist, level });
 				}
 			}
-			// Generate "neighbors" for all children of the current cell
+			// Add all the children of the current cell to the queue
 			if (!cell.children.leaf) {
 				for (let i = 0; i < this.maxChildren; i++) {
 					const child = cell.children.nodes[i];
 					if (!child) continue;
-					const offset = calculateIndexCoordinate(i, this.dimensions).map(
-						(v) => v * 3 ** (level - 1)
+					const offset = calculateIndexCoordinate(i, this.dimensions).mul(
+						3 ** (level - 1)
 					);
 
-					const neighbor = coords.map((c, j) => {
-						const min =
-							c -
-							offsetFromCellCenter[j] +
-							offset[j] -
-							Math.round(3 ** (level - 1) * 0.5 - 0.5);
-						const max =
-							c -
-							offsetFromCellCenter[j] +
-							offset[j] +
-							Math.round(3 ** (level - 1) * 0.5 - 0.5);
-						return clamp(start[j], [min, max]);
-					});
-					const neighborDist = euclidean(neighbor, start);
-					if (neighborDist > maxDistance) continue;
+					const childCenter = coord
+						.copy()
+						.sub(offsetFromCellCenter)
+						.add(offset);
+					// Calculate the child's min and max tile position that is just within the child
+					const childMin = childCenter
+						.copy()
+						.sub(Math.round(3 ** (level - 1) * 0.5 - 0.5));
+					const childMax = childCenter
+						.copy()
+						.add(Math.round(3 ** (level - 1) * 0.5 - 0.5));
+					// choose the coordinate within the child that is the closest to the start coordinate
+					const childCoord = start.copy().clamp(childMin, childMax);
+					const childDist = Vec.distance(childCoord, start);
+					if (childDist > maxDistance) continue;
 					queue.insert({
-						coords: neighbor,
-						dist: neighborDist,
+						coord: childCoord,
+						dist: childDist,
 						level: level - 1,
 					});
 				}
@@ -252,10 +250,10 @@ export class Grid<T> {
 		return undefined;
 	}
 
-	getCell(coordinates: number[]): Grid<T> {
-		const relativeCoordinates = this.#toRelativeCoordinates(coordinates);
-		const childIndex = calculateCoordinateIndex(relativeCoordinates);
-		if (relativeCoordinates.some((coord) => Math.abs(coord) > 1)) {
+	getCell(coord: Vec): Grid<T> {
+		const relativeCoord = this.#toRelativeCoordinate(coord);
+		const childIndex = calculateCoordinateIndex(relativeCoord);
+		if (relativeCoord.iter().some((coord) => Math.abs(coord) > 1)) {
 			// elevate the level of this node and move the children into a new child node
 			const newChild = new Grid<T>(this.dimensions, this.level);
 			this.level++;
@@ -272,10 +270,10 @@ export class Grid<T> {
 				nodes: [],
 			};
 			this.children.nodes[
-				calculateCoordinateIndex(relativeCoordinates.map(() => 0))
+				calculateCoordinateIndex(relativeCoord.toMapped(() => 0))
 			] = newChild;
 			newChild.parent = this;
-			return this.getCell(coordinates);
+			return this.getCell(coord);
 		} else if (this.level === 0) {
 			// this is where the leaf is
 			return this;
@@ -295,34 +293,32 @@ export class Grid<T> {
 			));
 			child.parent = this;
 			return child.getCell(
-				this.#subtractRelativeCoordinates(coordinates, relativeCoordinates)
+				this.#subtractRelativeCoordinate(coord, relativeCoord)
 			);
 		}
 	}
 
 	// Returns the lowest-level cell containing the coordinate and the value at that coordinate
 	getCellContaining(
-		coordinates: number[]
-	):
-		| { cell: Grid<T>; value: T | undefined; coordinates: number[] }
-		| undefined {
-		const relativeCoordinates = this.#toRelativeCoordinates(coordinates);
-		const childIndex = calculateCoordinateIndex(relativeCoordinates);
-		if (relativeCoordinates.some((coord) => Math.abs(coord) > 1)) {
+		coord: Vec
+	): { cell: Grid<T>; value: T | undefined; coord: Vec } | undefined {
+		const relativeCoord = this.#toRelativeCoordinate(coord);
+		const childIndex = calculateCoordinateIndex(relativeCoord);
+		if (relativeCoord.iter().some((coord) => Math.abs(coord) > 1)) {
 			return undefined;
 		} else if (this.children.leaf || this.level === 0) {
 			return {
 				cell: this,
 				value: this.children.leaf ? this.children.value : undefined,
-				coordinates,
+				coord,
 			};
 		} else {
 			const child = this.children.nodes[childIndex];
 			if (!child) {
-				return { cell: this, value: undefined, coordinates };
+				return { cell: this, value: undefined, coord };
 			}
 			return child.getCellContaining(
-				this.#subtractRelativeCoordinates(coordinates, relativeCoordinates)
+				this.#subtractRelativeCoordinate(coord, relativeCoord)
 			);
 		}
 	}
@@ -343,17 +339,17 @@ export class Grid<T> {
 		this.#tryUnify();
 	}
 
-	simplifyCell(coordinates: number[]) {
+	simplifyCell(coord: Vec) {
 		if (this.children.leaf) {
 			return;
 		}
-		const relativeCoordinates = this.#toRelativeCoordinates(coordinates);
-		const childIndex = calculateCoordinateIndex(relativeCoordinates);
-		if (relativeCoordinates.some((coord) => Math.abs(coord) > 1)) {
+		const relativeCoord = this.#toRelativeCoordinate(coord);
+		const childIndex = calculateCoordinateIndex(relativeCoord);
+		if (relativeCoord.iter().some((coord) => Math.abs(coord) > 1)) {
 			return;
 		} else {
 			this.children.nodes[childIndex]?.simplifyCell(
-				this.#subtractRelativeCoordinates(coordinates, relativeCoordinates)
+				this.#subtractRelativeCoordinate(coord, relativeCoord)
 			);
 			if (
 				this.children.nodes[childIndex]?.children.leaf &&
@@ -443,29 +439,28 @@ export class Grid<T> {
 		}
 	}
 
-	#toRelativeCoordinates(coordinates: number[]) {
-		return coordinates.map((c) => Math.round(c / 3 ** (this.level - 1)));
+	#toRelativeCoordinate(coord: Vec) {
+		return Vec.div(coord, 3 ** (this.level - 1)).round();
 	}
-	#subtractRelativeCoordinates(coords: number[], relativeCoords: number[]) {
-		return coords.map((c, i) => c - relativeCoords[i] * 3 ** (this.level - 1));
+	#subtractRelativeCoordinate(coord: Vec, relativeCoord: Vec) {
+		return Vec.sub(coord, Vec.mul(relativeCoord, 3 ** (this.level - 1)));
 	}
-	#relativeOffsetToAbsolute(offset: number[]) {
-		return offset.map((o) => o * 3 ** (this.level - 1));
+	#relativeOffsetToAbsolute(offset: Vec) {
+		return Vec.mul(offset, 3 ** (this.level - 1));
 	}
 }
 
-function calculateCoordinateIndex(coordinates: number[]) {
-	const index = coordinates.reduce(
-		(acc, curr, i) => acc + (curr + 1) * 3 ** i,
-		0
-	);
+function calculateCoordinateIndex(coord: Vec) {
+	const index = coord
+		.iter()
+		.reduce((acc, curr, i) => acc + (curr + 1) * 3 ** i, 0);
 	return index;
 }
 function calculateIndexCoordinate(index: number, dimensions: number) {
-	const coordinates: number[] = new Array(dimensions).fill(0);
+	const coord: number[] = new Array(dimensions).fill(0);
 	for (let i = 0; i < dimensions; i++) {
-		coordinates[i] = (index % 3) - 1;
+		coord[i] = (index % 3) - 1;
 		index = Math.floor(index / 3);
 	}
-	return coordinates;
+	return new Vec(coord);
 }

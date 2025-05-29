@@ -1,27 +1,27 @@
 import { Mat3 } from "./mat.ts";
 import { angleDiff, angleNormalize } from "./util.ts";
-import { Vec2, Vec2Like } from "./vec.ts";
+import { Vec } from "./vec.ts";
 
 export class RotoTranslation {
 	rotation: number;
-	translation: Vec2;
+	translation: Vec;
 
-	constructor(rotation: number, translation: Vec2Like) {
+	constructor(rotation: number, translation: Vec | number[]) {
 		this.rotation = rotation;
-		this.translation = Vec2.wrapped(translation);
+		this.translation = Vec.wrapped(translation);
 	}
 
 	copy(): RotoTranslation {
 		return new RotoTranslation(this.rotation, this.translation.copy());
 	}
 
-	apply(point: Vec2): Vec2 {
-		return point.copy().rotate(this.rotation).add(this.translation);
+	apply(point: Vec): Vec {
+		return point.copy().rotate2d(this.rotation).add(this.translation);
 	}
 	inverse(): RotoTranslation {
 		return new RotoTranslation(
 			-this.rotation,
-			this.translation.copy().rotate(-this.rotation).mul(-1)
+			this.translation.copy().rotate2d(-this.rotation).mul(-1)
 		);
 	}
 	matrix(): Mat3 {
@@ -40,8 +40,8 @@ export class RotoTranslation {
 		this.rotation += rotation;
 		return this;
 	}
-	translateRelative(translation: Vec2): RotoTranslation {
-		this.translation.add(translation.copy().rotate(this.rotation));
+	translateRelative(translation: Vec): RotoTranslation {
+		this.translation.add(translation.copy().rotate2d(this.rotation));
 		return this;
 	}
 	/**
@@ -49,10 +49,10 @@ export class RotoTranslation {
 	 */
 	rotateGlobal(rotation: number): RotoTranslation {
 		this.rotation += rotation;
-		this.translation.rotate(rotation);
+		this.translation.rotate2d(rotation);
 		return this;
 	}
-	translateGlobal(translation: Vec2): RotoTranslation {
+	translateGlobal(translation: Vec): RotoTranslation {
 		this.translation.add(translation);
 		return this;
 	}
@@ -65,7 +65,7 @@ export class RotoTranslation {
 		const rotation = a.rotation + b.rotation;
 		const translation = a.translation
 			.copy()
-			.add(b.translation.copy().rotate(a.rotation));
+			.add(b.translation.copy().rotate2d(a.rotation));
 		return new RotoTranslation(rotation, translation);
 	}
 
@@ -79,7 +79,7 @@ export class RotoTranslation {
 		const translation = a.translation
 			.copy()
 			.sub(b.translation)
-			.rotate(-b.rotation);
+			.rotate2d(-b.rotation);
 		return new RotoTranslation(rotation, translation);
 	}
 
@@ -90,17 +90,17 @@ export class RotoTranslation {
 		}
 
 		const translationMagnitude = this.translation.magnitude();
-		const translationAngle = this.translation.heading();
-		const refVec = new Vec2([0, 1]).rotate(this.rotation).sub([0, 1]);
+		const translationAngle = this.translation.heading2d();
+		const refVec = new Vec([0, 1]).rotate2d(this.rotation).sub([0, 1]);
 		const refDistance = refVec.magnitude();
-		const refAngle = angleDiff(refVec.heading(), Math.PI / 2);
+		const refAngle = angleDiff(refVec.heading2d(), Math.PI / 2);
 		const partialAngle = angleDiff(this.rotation, 0) * s;
 		const radius = -translationMagnitude / refDistance;
 
 		const relativeX = -(Math.cos(partialAngle) - 1) * radius;
 		const relativeY = Math.sin(partialAngle) * -radius;
-		const relative = new Vec2([relativeX, relativeY]);
-		this.translation = relative.rotate(-refAngle + translationAngle);
+		const relative = new Vec([relativeX, relativeY]);
+		this.translation = relative.rotate2d(-refAngle + translationAngle);
 		this.rotation *= s;
 		return this;
 	}

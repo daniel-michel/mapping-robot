@@ -2,7 +2,7 @@ import { LitElement, css, html } from "lit";
 import { customElement } from "lit/decorators.js";
 import { createRef, ref } from "lit/directives/ref.js";
 import { Simulation } from "../logic/simulation";
-import { Vec2 } from "../logic/math/vec";
+import { Vec } from "../logic/math/vec";
 import { rotoTranslateCtx, savedState } from "../logic/rendering";
 import { RobotController } from "../logic/robot-controller";
 import { RotoTranslation } from "../logic/math/roto-translation";
@@ -104,7 +104,7 @@ export class SimulationRenderer extends LitElement {
 			ctx.beginPath();
 			ctx.rect(0, 0, splitX, clientHeight);
 			ctx.clip();
-			this.simulation.render(ctx, new Vec2([splitX, clientHeight]), t);
+			this.simulation.render(ctx, new Vec([splitX, clientHeight]), t);
 		});
 		saved(() => {
 			ctx.translate(splitX, 0);
@@ -113,7 +113,7 @@ export class SimulationRenderer extends LitElement {
 			ctx.clip();
 			this.robotController.render(
 				ctx,
-				new Vec2([clientWidth - splitX, clientHeight]),
+				new Vec([clientWidth - splitX, clientHeight]),
 				t
 			);
 		});

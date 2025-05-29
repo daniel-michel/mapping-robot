@@ -1,31 +1,30 @@
 import { interpolate } from "./math/util.ts";
-import { Line, Vec2, Vec2Like } from "./math/vec.ts";
+import { Line, Vec } from "./math/vec.ts";
 import { createLcg } from "./pseudorandom.ts";
 import { World } from "./world.ts";
 
 export function generateFractalBoxWorld(seed: number) {
 	const lcg = createLcg(seed);
 	const fractalWall = (
-		start: Vec2Like,
-		end: Vec2Like,
+		start: Vec | number[],
+		end: Vec | number[],
 		depth: number
 	): Line[] => {
+		start = Vec.wrapped(start);
+		end = Vec.wrapped(end);
 		if (depth === 0) {
 			return [[start, end]];
 		}
 		const ragged = lcg.nextFloat() < 0.2;
-		const mid = [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2] as Vec2Like;
+		const mid = [(start.x + end.x) / 2, (start.y + end.y) / 2];
 		const wallLength = Math.sqrt(
-			(end[0] - start[0]) ** 2 + (end[1] - start[1]) ** 2
+			(end.x - start.x) ** 2 + (end.y - start.y) ** 2
 		);
 		const angle = lcg.nextFloat() * Math.PI * 2;
 		const length = lcg.nextFloat() * wallLength * (ragged ? 0.1 : 0.5);
-		const offset = [
-			Math.cos(angle) * length,
-			Math.sin(angle) * length,
-		] as Vec2Like;
-		const newStart = Vec2.add(mid, offset);
-		const newEnd = Vec2.sub(mid, offset);
+		const offset = [Math.cos(angle) * length, Math.sin(angle) * length];
+		const newStart = Vec.add(mid, offset);
+		const newEnd = Vec.sub(mid, offset);
 		if (ragged) {
 			return [
 				...fractalWall(start, newStart, depth - 1),
@@ -61,13 +60,12 @@ export function generateGraphWorld(
 	const perlin = new PerlinNoise(seed);
 	function distToGraphEdgeWithNoise(x: number, y: number) {
 		let minDist = Infinity;
-		const p = new Vec2([x, y]);
+		const p = new Vec([x, y]);
 		for (const [p1, p2] of mst) {
 			const v = p2.copy().sub(p1);
 			const w = p.copy().sub(p1);
 			const len2 = v.magnitudeSquared();
-			const t =
-				len2 === 0 ? 0 : Math.max(0, Math.min(1, Vec2.dot(w, v) / len2));
+			const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, Vec.dot(w, v) / len2));
 			const proj = p1.copy().add(v.copy().mul(t));
 			const d = p.copy().sub(proj).magnitude();
 			if (d < minDist) minDist = d;
@@ -91,11 +89,11 @@ export function generateRandomGraph(
 	size: number
 ) {
 	const lcg = createLcg(seed);
-	const nodes: Vec2[] = [new Vec2([0, 0])];
+	const nodes: Vec[] = [new Vec([0, 0])];
 	for (let i = 1; i < nodeCount; i++) {
 		const angle = lcg.nextFloat() * Math.PI * 2;
 		const radius = (1 - lcg.nextFloat() ** 2) * size;
-		nodes.push(new Vec2([Math.cos(angle) * radius, Math.sin(angle) * radius]));
+		nodes.push(new Vec([Math.cos(angle) * radius, Math.sin(angle) * radius]));
 	}
 
 	// Kruskal's algorithm for MST
@@ -114,7 +112,7 @@ export function generateRandomGraph(
 		if (parent[x] !== x) parent[x] = find(parent[x]);
 		return parent[x];
 	}
-	const mst: [Vec2, Vec2][] = [];
+	const mst: [Vec, Vec][] = [];
 	for (const { a, b } of edges) {
 		const pa = find(a),
 			pb = find(b);
@@ -146,11 +144,11 @@ export function marchingSquaresFromGraph(
 		ny = grid[0].length;
 	for (let i = 0; i < nx - 1; i++) {
 		for (let j = 0; j < ny - 1; j++) {
-			const corners: Vec2[] = [
-				new Vec2([i * gridStep - size, j * gridStep - size]),
-				new Vec2([(i + 1) * gridStep - size, j * gridStep - size]),
-				new Vec2([(i + 1) * gridStep - size, (j + 1) * gridStep - size]),
-				new Vec2([i * gridStep - size, (j + 1) * gridStep - size]),
+			const corners: Vec[] = [
+				new Vec([i * gridStep - size, j * gridStep - size]),
+				new Vec([(i + 1) * gridStep - size, j * gridStep - size]),
+				new Vec([(i + 1) * gridStep - size, (j + 1) * gridStep - size]),
+				new Vec([i * gridStep - size, (j + 1) * gridStep - size]),
 			];
 			const values = [
 				grid[i][j],
@@ -164,7 +162,7 @@ export function marchingSquaresFromGraph(
 				[2, 3],
 				[3, 0],
 			];
-			const points: Vec2[] = [];
+			const points: Vec[] = [];
 			for (const [a, b] of edgeIndices) {
 				const va = values[a],
 					vb = values[b];

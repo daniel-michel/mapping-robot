@@ -1,12 +1,12 @@
-import { Vec2, Vec2Like } from "./vec.ts";
+import { Vec, VecLike } from "./vec.ts";
 
 export class Rect {
-	#center: Vec2;
-	#halfSize: Vec2;
+	#center: Vec;
+	#halfSize: Vec;
 
-	constructor(center: Vec2Like, halfSize: Vec2Like) {
-		this.#center = Vec2.wrapped(center);
-		this.#halfSize = Vec2.wrapped(halfSize);
+	constructor(center: VecLike, halfSize: VecLike) {
+		this.#center = Vec.wrapped(center);
+		this.#halfSize = Vec.wrapped(halfSize);
 	}
 	get center() {
 		return this.#center;
@@ -77,11 +77,11 @@ export class Rect {
 		);
 	}
 
-	static containsPoint(a: Rect, b: Vec2): boolean {
+	static containsPoint(a: Rect, b: Vec): boolean {
 		return a.left <= b.x && a.right >= b.x && a.top >= b.y && a.bottom <= b.y;
 	}
 
-	static containing(objects: (Rect | Vec2)[]): Rect {
+	static containing(objects: (Rect | Vec)[]): Rect {
 		let left = Infinity;
 		let right = -Infinity;
 		let top = -Infinity;
@@ -92,7 +92,7 @@ export class Rect {
 				right = Math.max(right, obj.right);
 				top = Math.max(top, obj.top);
 				bottom = Math.min(bottom, obj.bottom);
-			} else if (obj instanceof Vec2) {
+			} else if (obj instanceof Vec) {
 				left = Math.min(left, obj.x);
 				right = Math.max(right, obj.x);
 				top = Math.max(top, obj.y);

@@ -3,7 +3,7 @@ import {
 	Ray,
 	rayLineIntersection,
 	RayLineIntersectionResult,
-	Vec2,
+	Vec,
 } from "./math/vec.ts";
 import { AABBTree } from "./data-structures/aabb-tree.ts";
 import { Rect } from "./math/rect.ts";
@@ -15,13 +15,13 @@ export class World {
 	constructor(walls: Line[]) {
 		this.walls = walls;
 		this.tree = new AABBTree(walls, (line) =>
-			Rect.containing([Vec2.wrapped(line[0]), Vec2.wrapped(line[1])])
+			Rect.containing([Vec.wrapped(line[0]), Vec.wrapped(line[1])])
 		);
 	}
 
 	castRay(ray: Ray) {
-		const origin = Vec2.wrapped(ray[0]);
-		const direction = Vec2.wrapped(ray[1]).copy().normalize();
+		const origin = Vec.wrapped(ray[0]);
+		const direction = Vec.wrapped(ray[1]).copy().normalize();
 		let closest: RayLineIntersectionResult | null = null;
 		for (const { value: wall, dist } of this.tree.raycast(origin, direction)) {
 			if (closest !== null && closest.distance < dist) {

@@ -8,7 +8,7 @@ import {
 } from "../math/mat.ts";
 import { RotoTranslation } from "../math/roto-translation.ts";
 import { angleDiff, angleNormalize } from "../math/util.ts";
-import { Vec2 } from "../math/vec.ts";
+import { Vec } from "../math/vec.ts";
 import { RangingSensorScan } from "../robot.ts";
 
 self.addEventListener("message", (e: MessageEvent) => {
@@ -17,16 +17,16 @@ self.addEventListener("message", (e: MessageEvent) => {
 			const result = scanMatching(
 				{
 					...e.data.scanA,
-					points: e.data.scanA.points.map((point) => ({
+					points: e.data.scanA.points.map((point: { point?: number[] }) => ({
 						...point,
-						point: point.point && new Vec2(point.point),
+						point: point.point && new Vec(point.point),
 					})),
 				},
 				{
 					...e.data.scanB,
-					points: e.data.scanB.points.map((point) => ({
+					points: e.data.scanB.points.map((point: { point?: number[] }) => ({
 						...point,
-						point: point.point && new Vec2(point.point),
+						point: point.point && new Vec(point.point),
 					})),
 				},
 				new RotoTranslation(
@@ -142,7 +142,7 @@ export function scanMatching(
 					bPoint: b,
 					aIndex: i,
 					bIndex: j,
-					distSquared: Vec2.distanceSquared(a, bTransformed),
+					distSquared: Vec.distanceSquared(a, bTransformed),
 				};
 			})
 			.filter((i) => i !== null);
@@ -222,7 +222,7 @@ export function* correspondenceMatch(
 		let best: number | null = null;
 		let bestDist = Infinity;
 
-		const pwiAngle = pwi.heading() - Math.PI / 2; // the heading is the angle from the x-axis but the scan is centered on the y-axis and using the angle from the y-axis
+		const pwiAngle = pwi.heading2d() - Math.PI / 2; // the heading is the angle from the x-axis but the scan is centered on the y-axis and using the angle from the y-axis
 		const startIndex = Math.floor(
 			angleNormalize(
 				angleDiff(pwiAngle, scanA.points[0].angle) * (scanA.count / scanA.angle)
@@ -296,20 +296,20 @@ export function* correspondenceMatch(
 
 /**
  * Computes the optimal rotation matrix and translation vector that aligns two sets of 2D points.
- * @param P Array of Vec2 points (source)
- * @param Q Array of Vec2 points (target)
- * @returns { rotation: number, translation: Vec2 }
+ * @param P Array of Vec points (source)
+ * @param Q Array of Vec points (target)
+ * @returns { rotation: number, translation: Vec }
  */
-export function computeRotoTranslation(P: Vec2[], Q: Vec2[]) {
+export function computeRotoTranslation(P: Vec[], Q: Vec[]) {
 	if (P.length !== Q.length) {
 		throw new Error("Point sets must have the same length");
 	}
 	const n = P.length;
 	// Compute centroids
-	const centroidP = P.reduce((acc, p) => acc.add(p), new Vec2([0, 0])).mul(
+	const centroidP = P.reduce((acc, p) => acc.add(p), new Vec([0, 0])).mul(
 		1 / n
 	);
-	const centroidQ = Q.reduce((acc, q) => acc.add(q), new Vec2([0, 0])).mul(
+	const centroidQ = Q.reduce((acc, q) => acc.add(q), new Vec([0, 0])).mul(
 		1 / n
 	);
 
