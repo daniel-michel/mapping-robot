@@ -65,8 +65,8 @@ export class ArduinoRobot implements Robot {
 		const iter = this.#runCommand(command);
 		let current = await iter.next();
 		while (!current.done) {
-			const { value } = current;
-			const [left, right] = value.split(",").map((v) => +v);
+			// const { value } = current;
+			// const [left, right] = value.split(",").map((v) => +v);
 
 			current = await iter.next();
 		}

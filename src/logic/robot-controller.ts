@@ -1,5 +1,5 @@
 import { RotoTranslation } from "./math/roto-translation";
-import { angleDiff, angleNormalize, clamp } from "./math/util.ts";
+import { angleDiff, clamp } from "./math/util.ts";
 import { advancePointAlongPath, Vec } from "./math/vec";
 import { OccupancyBin, OccupancyProb } from "./slam/occupancy-grid.ts";
 import {
@@ -41,7 +41,7 @@ const renderOccupancyGrid = gridRenderer<OccupancyBin>({
 	},
 });
 const renderExploreGrid = gridRenderer<true>({
-	cellStyle: (value) => {
+	cellStyle: () => {
 		return {
 			show: true,
 			shape: "diamond",
@@ -53,7 +53,7 @@ const renderExploreGrid = gridRenderer<true>({
 	},
 });
 const renderDrivableGrid = gridRenderer<true>({
-	cellStyle: (value) => {
+	cellStyle: () => {
 		return {
 			show: true,
 			shape: "rect",
@@ -696,7 +696,6 @@ export class RobotController {
 
 function getPathfindConfig(
 	slam: Slam,
-	robotPosition: Vec,
 	base: Pick<AStarConfig<Vec, void>, "heuristic" | "isGoal">
 ) {
 	const nodes = new Map<string, Vec>();
@@ -787,7 +786,7 @@ function pathfindToUnexploredRegion(slam: Slam, robotPosition: Vec) {
 	const start = determinePathfindingStart(slam, robotPosition);
 	const aStar = new AStar(
 		start,
-		getPathfindConfig(slam, robotPosition, {
+		getPathfindConfig(slam, {
 			heuristic: (node) => {
 				const grid = slam.occupancyGrids.explore;
 				const closest = grid.findClosest(
@@ -834,7 +833,7 @@ function pathfindToPosition(
 	);
 	const aStar = new AStar(
 		start,
-		getPathfindConfig(slam, robotPosition, {
+		getPathfindConfig(slam, {
 			heuristic: (node) => {
 				return Vec.distance(node, target);
 			},

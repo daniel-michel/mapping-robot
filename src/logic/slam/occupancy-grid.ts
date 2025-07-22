@@ -189,48 +189,6 @@ export function toBinaryOccupancyGrid(
 	}) satisfies OccupancyGrid;
 }
 
-function addToProbabilityGridDiluted(
-	probabilityGrid: OccupancyProbGrid,
-	point: Vec,
-	value: number,
-	radius: number
-) {
-	const offset = Math.round(radius);
-
-	const start = point.copy().sub([offset, offset]);
-	const end = point.copy().add([offset, offset]);
-
-	// 1. Collect all weights and positions
-	const positions: { pos: Vec; weight: number }[] = [];
-	let totalWeight = 0;
-
-	for (let x = start.x; x <= end.x; x++) {
-		const xGaussian = gaussian(x, point.x, (radius + 0.1) * 0.7);
-		for (let y = start.y; y <= end.y; y++) {
-			const yGaussian = gaussian(y, point.y, (radius + 0.1) * 0.7);
-			const weight = xGaussian * yGaussian;
-			if (weight < 0.01) continue;
-			const pos = new Vec([x, y]);
-			positions.push({ pos, weight });
-			totalWeight += weight;
-		}
-	}
-
-	const normalizationFactor = 1 / totalWeight;
-
-	// 2. Normalize and add to grid
-	for (const { pos, weight } of positions) {
-		const normalizedWeight = weight * normalizationFactor;
-		addWeightedToProbabilityGrid(probabilityGrid, pos, value, normalizedWeight);
-	}
-}
-
-function gaussian(x: number, mean: number, stddev: number): number {
-	const coeff = 1 / (stddev * Math.sqrt(2 * Math.PI));
-	const exponent = -((x - mean) ** 2) / (2 * stddev ** 2);
-	return coeff * Math.exp(exponent);
-}
-
 function addWeightedToProbabilityGrid(
 	probabilityGrid: OccupancyProbGrid,
 	point: Vec,
