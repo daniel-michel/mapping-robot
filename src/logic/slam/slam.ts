@@ -2,7 +2,7 @@ import { Grid } from "../data-structures/grid.ts";
 import { RotoTranslation } from "../math/roto-translation.ts";
 import { Vec } from "../math/vec.ts";
 import {
-	generateOccupancyGrid,
+	asyncGenerateOccupancyGrid,
 	OccupancyGrid,
 	OccupancyProbGrid,
 	toBinaryOccupancyGrid,
@@ -90,7 +90,7 @@ export class PoseGraph {
 				}
 				const transform = RotoTranslation.combine(
 					otherEstimate,
-					!isFirst ? constraint.transform : constraint.transform.inverse()
+					!isFirst ? constraint.transform : constraint.transform.toInverted()
 				);
 				return {
 					transform,
@@ -125,6 +125,7 @@ export class Slam {
 	poseGraph = new PoseGraph();
 
 	#surfaceThreshold = 20;
+	#finishedPreviousScanMatching = Promise.resolve();
 
 	scans: Map<number, { scan: RangingSensorScan; surfaces: Surface[] }> =
 		new Map();
@@ -135,10 +136,12 @@ export class Slam {
 		prob: OccupancyProbGrid;
 		bin: OccupancyGrid;
 		explore: Grid<true>;
+		drivable: Grid<true>;
 	} = {
 		prob: new Grid(2),
 		bin: new Grid(2),
 		explore: new Grid(2),
+		drivable: new Grid(2),
 	};
 
 	correspondences: {
@@ -146,6 +149,10 @@ export class Slam {
 		poseB: number;
 		pairs: [number, number][];
 	}[] = [];
+
+	get finishedScanMatching() {
+		return this.#finishedPreviousScanMatching;
+	}
 
 	move(rotoTranslation: RotoTranslation) {
 		const newPoseId = this.poseId + 1;
@@ -158,7 +165,7 @@ export class Slam {
 		this.poseId = newPoseId;
 		return this.poseId;
 	}
-	addScan(scan: RangingSensorScan) {
+	async addScan(scan: RangingSensorScan) {
 		const points = scan.points
 			.map((p) => p.point?.copy())
 			.filter((p) => p !== undefined);
@@ -186,42 +193,55 @@ export class Slam {
 			scan,
 			surfaces: surfaces,
 		});
+		await this.#generateMatchesForScan(this.poseId);
+	}
 
-		const currentPose = this.poseGraph.getNodeEstimate(this.poseId);
-		const score = (id: number, transform: RotoTranslation) => {
-			const expectedOverlap = this.expectedOverlapWithScanOfPose(
-				id,
-				RotoTranslation.relative(currentPose, transform)
-			);
-			if (expectedOverlap < 0.4) {
-				return Infinity;
-			}
-			return (
-				1 / expectedOverlap ** 2 +
-				Vec.distanceSquared(transform.translation, currentPose.translation) *
-					0.002
-			);
-		};
-		const sorted = this.poseGraph.nodeEstimates
-			.entries()
-			.map(([id, estimate]) => {
-				if (id === this.poseId) {
-					return null;
+	async #generateMatchesForScan(poseId: number) {
+		const resolver = Promise.withResolvers<void>();
+		const previousFinished = this.#finishedPreviousScanMatching;
+		try {
+			this.#finishedPreviousScanMatching = resolver.promise;
+			await previousFinished;
+
+			this.poseGraph.optimize(3);
+			const currentPose = this.poseGraph.getNodeEstimate(poseId);
+			const score = (id: number, transform: RotoTranslation) => {
+				const expectedOverlap = this.expectedOverlapWithScanOfPose(
+					id,
+					RotoTranslation.relative(currentPose, transform)
+				);
+				if (expectedOverlap < 0.4) {
+					return Infinity;
 				}
-				const s = score(id, estimate);
-				return { id, estimate, s };
-			})
-			.filter((i) => i !== null)
-			.filter(({ s }) => s < 30)
-			.toArray()
-			.sort((a, b) => a.s - b.s);
-		const best = sorted.slice(0, 5);
+				return (
+					1 / expectedOverlap ** 2 +
+					Vec.distanceSquared(transform.translation, currentPose.translation) *
+						0.002
+				);
+			};
+			const sorted = this.poseGraph.nodeEstimates
+				.entries()
+				.map(([id, estimate]) => {
+					if (id === poseId) {
+						return null;
+					}
+					const s = score(id, estimate);
+					return { id, estimate, s };
+				})
+				.filter((i) => i !== null)
+				.filter(({ s }) => s < 30)
+				.toArray()
+				.sort((a, b) => a.s - b.s);
+			const best = sorted.slice(0, 5);
 
-		Promise.all(best.map(({ id }) => this.matchScans(id, this.poseId))).then(
-			() => {
-				// this.updateOccupancyGrid();
-			}
-		);
+			await Promise.all(best.map(({ id }) => this.matchScans(id, poseId))).then(
+				() => {
+					// this.updateOccupancyGrid();
+				}
+			);
+		} finally {
+			resolver.resolve();
+		}
 	}
 
 	/**
@@ -231,9 +251,12 @@ export class Slam {
 	 * @returns A value in the interval [0; 1] describing the percentage of overlap
 	 */
 	expectedOverlapWithScanOfPose(poseId: number, transform: RotoTranslation) {
-		const { scan } = this.scans.get(poseId)!;
+		const { scan } = this.scans.get(poseId) ?? {};
+		if (!scan) {
+			return 0;
+		}
 		const angle = scan.angle;
-		const inverseTransform = transform.inverse();
+		const inverseTransform = transform.toInverted();
 		const transMat = inverseTransform.matrix();
 		const scanOrigin = transMat.mulVec2(new Vec([0, 0]));
 		const pointsWithinNewScan = scan.points.filter(({ point }) => {
@@ -262,7 +285,7 @@ export class Slam {
 		return pointsWithinNewScan.length / scan.count;
 	}
 
-	updateOccupancyGrid() {
+	async updateOccupancyGrid() {
 		const scans = this.scans.entries().map(([poseId, { scan }]) => {
 			const transform = this.poseGraph.getNodeEstimate(poseId);
 			return {
@@ -270,11 +293,32 @@ export class Slam {
 				transform,
 			};
 		});
-		this.occupancyGrids.prob = generateOccupancyGrid(
+		this.occupancyGrids.prob = await asyncGenerateOccupancyGrid(
 			scans.toArray(),
 			this.occupancyGridResolution
 		);
 		this.occupancyGrids.bin = toBinaryOccupancyGrid(this.occupancyGrids.prob);
+		const radius = 25 / this.occupancyGridResolution;
+		this.occupancyGrids.drivable = this.occupancyGrids.bin.convolve(
+			(v, getNeighbor) => {
+				if (v !== 0) {
+					return undefined;
+				}
+				const offsetRadius = Math.ceil(radius);
+				for (let xo = -offsetRadius; xo <= offsetRadius; xo++) {
+					for (let yo = -offsetRadius; yo <= offsetRadius; yo++) {
+						const offset = new Vec([xo, yo]);
+						if (offset.magnitude() > radius) {
+							continue;
+						}
+						if (getNeighbor(offset.vec) !== 0) {
+							return undefined;
+						}
+					}
+				}
+				return true;
+			}
+		);
 		this.occupancyGrids.explore = this.occupancyGrids.bin.convolve(
 			(v, getNeighbor) => {
 				if (v !== 0) {

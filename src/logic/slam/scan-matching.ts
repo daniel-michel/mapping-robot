@@ -245,14 +245,19 @@ export function* correspondenceMatch(
 					upStopped = true;
 					continue;
 				}
-				lastDistUp = pwi.copy().sub(scanA.points[up].point).magnitudeSquared();
+				const current = scanA.points[up];
+				if (!current.point) {
+					up++;
+					continue;
+				}
+				lastDistUp = pwi.copy().sub(current.point).magnitudeSquared();
 				// FIXME: what does "correspondence is acceptable" mean?
 				if (/* correspondence is acceptable && */ lastDistUp < bestDist) {
 					best = up;
 					bestDist = lastDistUp;
 				}
 				if (up > startIndex) {
-					const deltaPhi = angleDiff(scanA.points[up].angle, pwiAngle);
+					const deltaPhi = angleDiff(current.angle, pwiAngle);
 					const minDistUp = Math.sin(deltaPhi) * pwi.magnitude();
 					if (minDistUp ** 2 > bestDist) {
 						upStopped = true;
@@ -267,17 +272,19 @@ export function* correspondenceMatch(
 					downStopped = true;
 					continue;
 				}
-				lastDistDown = pwi
-					.copy()
-					.sub(scanA.points[down].point)
-					.magnitudeSquared();
+				const current = scanA.points[down];
+				if (!current.point) {
+					down--;
+					continue;
+				}
+				lastDistDown = pwi.copy().sub(current.point).magnitudeSquared();
 				// FIXME: what does "correspondence is acceptable" mean?
 				if (/* correspondence is acceptable && */ lastDistDown < bestDist) {
 					best = down;
 					bestDist = lastDistDown;
 				}
 				if (down < startIndex) {
-					const deltaPhi = angleDiff(scanA.points[down].angle, pwiAngle);
+					const deltaPhi = angleDiff(current.angle, pwiAngle);
 					const minDistDown = Math.sin(deltaPhi) * pwi.magnitude();
 					if (minDistDown ** 2 > bestDist) {
 						downStopped = true;

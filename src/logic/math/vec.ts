@@ -1,4 +1,5 @@
 import { assert } from "../assert.ts";
+import { clamp } from "./util.ts";
 
 export type VecLike = Vec | number[];
 
@@ -389,5 +390,105 @@ export function rayLineIntersection(
 		intersecting,
 		/** The distance from the ray origin to the intersection point */
 		distance: intersection.t,
+	};
+}
+
+export function snapPointToLine(point: Vec, line: Line) {
+	const alongLine = Vec.sub(line[1], line[0]).freeze();
+	const length = alongLine.magnitude();
+	const lineDir = alongLine.copy().normalize().freeze();
+	const rel = Vec.sub(point, line[0]).freeze();
+	const projected = clamp(Vec.dot(lineDir, rel), [0, length]);
+	const fraction = projected / length;
+	const snapped = lineDir.copy().mul(projected).add(line[0]);
+	const distance = Vec.distance(point, snapped);
+	return {
+		/** The distance from the line start to the snapped point */
+		projected,
+		/** The fraction of the line length that the snapped point is at */
+		fraction,
+		/** The snapped point on the line */
+		snapped,
+		/** The distance from the original point to the snapped point */
+		distance,
+	};
+}
+
+export function snapPointToPath(point: Vec, path: Vec[]) {
+	let best:
+		| {
+				distance: number;
+				index: number;
+				fraction: number;
+				snapped: Vec;
+		  }
+		| undefined;
+	for (let i = 0; i < path.length - 1; i++) {
+		const res = snapPointToLine(point, [path[i], path[i + 1]]);
+		if (best === undefined || res.distance < best.distance) {
+			best = {
+				distance: res.distance,
+				index: i,
+				fraction: res.fraction,
+				snapped: res.snapped,
+			};
+		}
+	}
+	return best;
+}
+
+export function advancePositionAlongPath(
+	path: Vec[],
+	position: {
+		index: number;
+		fraction: number;
+	},
+	distance: number
+) {
+	if (path.length === 0) {
+		return position;
+	}
+	let { index, fraction } = position;
+	while (distance > 0 && index < path.length - 1) {
+		const segment = Vec.sub(path[index + 1], path[index]);
+		const segmentLength = segment.magnitude();
+		const leftLengthInSegment = segmentLength * (1 - fraction);
+		if (leftLengthInSegment >= distance) {
+			fraction += distance / segmentLength;
+			distance = 0;
+		} else {
+			distance -= leftLengthInSegment;
+			index++;
+			fraction = 0; // Reset fraction to the start of the next segment
+		}
+	}
+	if (index >= path.length - 1) {
+		index = path.length - 2; // Ensure we don't go out of bounds
+		fraction = 1; // Snap to the end of the path
+	}
+	return { index, fraction };
+}
+
+export function advancePointAlongPath(
+	point: Vec,
+	path: Vec[],
+	distance: number
+) {
+	const snapped = snapPointToPath(point, path);
+	if (snapped === undefined) {
+		return { index: 0, fraction: 0 };
+	}
+	const { index, fraction } = advancePositionAlongPath(
+		path,
+		{ index: snapped.index, fraction: snapped.fraction },
+		distance
+	);
+	console.log(snapped, index, fraction);
+	const segment = Vec.sub(path[index + 1], path[index]);
+	const advancedPoint = Vec.add(path[index], segment.copy().mul(fraction));
+	return {
+		index,
+		fraction,
+		point: advancedPoint,
 	};
 }

@@ -1,5 +1,6 @@
 import { Grid } from "../data-structures/grid.ts";
 import { RotoTranslation } from "../math/roto-translation.ts";
+import { clamp } from "../math/util.ts";
 import { Vec } from "../math/vec.ts";
 import { RangingSensorScan } from "../robot/robot.ts";
 
@@ -11,6 +12,131 @@ export type OccupancyProbGrid = Grid<OccupancyProb>;
 /** 0 = free, 1 = occupied, undefined = unknown */
 export type OccupancyBin = 0 | 1;
 export type OccupancyGrid = Grid<OccupancyBin>;
+
+self.addEventListener("message", (e: MessageEvent) => {
+	switch (e.data.action) {
+		case "generateOccupancyGrid": {
+			const result = generateOccupancyGrid(
+				e.data.scans.map(
+					(scanWithTransform: {
+						scan: RangingSensorScan;
+						transform: RotoTranslation;
+					}) => ({
+						scan: {
+							points: scanWithTransform.scan.points.map((p) => ({
+								...p,
+								point: p.point
+									? new Vec(p.point as unknown as [number, number])
+									: p.point,
+							})),
+						},
+						transform: new RotoTranslation(
+							...(scanWithTransform.transform as unknown as [
+								number,
+								[number, number]
+							])
+						),
+					})
+				),
+				e.data.resolution
+			);
+			self.postMessage({
+				grid: result.serialize(),
+				level: result.level,
+			});
+			break;
+		}
+	}
+});
+
+export async function asyncGenerateOccupancyGrid(
+	scans: {
+		scan: RangingSensorScan;
+		transform: RotoTranslation;
+	}[],
+	resolution: number = 0.3
+): Promise<Grid<OccupancyProb>> {
+	const MAX_THREADS = navigator.hardwareConcurrency;
+	const MIN_BATCH_SIZE = 4;
+
+	if (scans.length === 0) {
+		return new Grid(2);
+	}
+	const threads = clamp(Math.floor(scans.length / MIN_BATCH_SIZE), [
+		1,
+		MAX_THREADS,
+	]);
+
+	const batches = [];
+	const remainingScans = scans.slice();
+
+	for (let i = 0; i < threads; i++) {
+		const count = Math.round(remainingScans.length / (threads - i));
+		batches.push(remainingScans.splice(0, count));
+	}
+
+	const batchResults = await Promise.all(
+		batches.map((batch) => asyncGenerateOccupancyGridBatch(batch, resolution))
+	);
+
+	console.log(
+		batchResults,
+		batchResults.map((g) => g.grid.level)
+	);
+
+	const mergedResult: Grid<OccupancyProb> = Grid.merge(
+		batchResults.map((b) => b.grid),
+		(values) => {
+			const totalWeight = values.reduce((acc, v) => acc + (v?.weight ?? 0), 0);
+			return {
+				prob:
+					values.reduce((acc, v) => acc + (v ? v.prob * v.weight : 0), 0) /
+					totalWeight,
+				weight: totalWeight,
+			} satisfies OccupancyProb;
+		}
+	);
+
+	return mergedResult;
+}
+export function asyncGenerateOccupancyGridBatch(
+	batch: {
+		scan: RangingSensorScan;
+		transform: RotoTranslation;
+	}[],
+	resolution: number
+) {
+	return new Promise<{
+		grid: Grid<OccupancyProb>;
+	}>((resolve) => {
+		const worker = new Worker(new URL("./occupancy-grid.js", import.meta.url), {
+			type: "module",
+		});
+		worker.addEventListener("message", (e) => {
+			worker.terminate();
+			resolve({
+				grid: Grid.fromSerialized(e.data.grid, 2, e.data.level),
+			});
+		});
+		worker.postMessage({
+			action: "generateOccupancyGrid",
+			scans: batch.map((scanWithTransform) => ({
+				scan: {
+					...scanWithTransform.scan,
+					points: scanWithTransform.scan.points.map((p) => ({
+						...p,
+						point: p.point ? [...p.point] : null,
+					})),
+				},
+				transform: [
+					scanWithTransform.transform.rotation,
+					[...scanWithTransform.transform.translation],
+				],
+			})),
+			resolution,
+		});
+	});
+}
 
 export function generateOccupancyGrid(
 	scans: {
@@ -32,9 +158,16 @@ export function generateOccupancyGrid(
 				scanOrigin.copy().div(resolution)
 			).forEach((point, i) => {
 				const value = i === 0 ? 1 : 0;
-				const dilution =
-					0.5 + Vec.distance(point, scanOrigin.copy().div(resolution)) * 0.05;
-				addToProbabilityGridDiluted(probabilityGrid, point, value, dilution);
+				addWeightedToProbabilityGrid(
+					probabilityGrid,
+					point,
+					value,
+					// 10 / (i + 10)
+					0.5
+				);
+				// const dilution =
+				// 	0.5 + Vec.distance(point, scanOrigin.copy().div(resolution)) * 0.05;
+				// addToProbabilityGridDiluted(probabilityGrid, point, value, dilution);
 			});
 		}
 	}
@@ -45,7 +178,7 @@ export function toBinaryOccupancyGrid(
 	probabilityGrid: OccupancyProbGrid
 ): OccupancyGrid {
 	return probabilityGrid.map(({ prob, weight }) => {
-		if (weight < 1) {
+		if (weight < 2) {
 			return undefined;
 		}
 		if (prob > 0.2) {

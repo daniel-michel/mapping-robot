@@ -18,7 +18,7 @@ export class RotoTranslation {
 	apply(point: Vec): Vec {
 		return point.copy().rotate2d(this.rotation).add(this.translation);
 	}
-	inverse(): RotoTranslation {
+	toInverted(): RotoTranslation {
 		return new RotoTranslation(
 			-this.rotation,
 			this.translation.copy().rotate2d(-this.rotation).mul(-1)

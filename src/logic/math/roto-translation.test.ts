@@ -35,7 +35,7 @@ Deno.test({
 			const p = new Vec([1, 2]);
 			const transform = new RotoTranslation(Math.PI / 5, [1, 5]);
 			const transformed = transform.apply(p);
-			const inverse = transform.inverse();
+			const inverse = transform.toInverted();
 			const transformedBack = inverse.apply(transformed);
 			assertAlmostEquals(
 				transformedBack.x,
@@ -52,8 +52,8 @@ Deno.test({
 		});
 		await t.step("double inverse", () => {
 			const transform = new RotoTranslation(Math.PI / 5, [1, 5]);
-			const inverse = transform.inverse();
-			const doubleInverse = inverse.inverse();
+			const inverse = transform.toInverted();
+			const doubleInverse = inverse.toInverted();
 			assertAlmostEqualRotoTranslation(
 				doubleInverse,
 				transform,
@@ -105,15 +105,15 @@ Deno.test({
 			});
 			await t.step("inverted transformations", () => {
 				const interpolatedInverse = RotoTranslation.interpolate(
-					a.inverse(),
-					b.inverse(),
+					a.toInverted(),
+					b.toInverted(),
 					time
-				).inverse();
+				).toInverted();
 				const interpolatedBackInverse = RotoTranslation.interpolate(
-					b.inverse(),
-					a.inverse(),
+					b.toInverted(),
+					a.toInverted(),
 					1 - time
-				).inverse();
+				).toInverted();
 				assertAlmostEqualRotoTranslation(
 					interpolatedInverse,
 					interpolated,
@@ -139,8 +139,8 @@ Deno.test({
 					time
 				);
 				const backInterpolation = RotoTranslation.interpolate(
-					RotoTranslation.combine(interpolatedOffset, a.inverse()),
-					RotoTranslation.combine(interpolatedOffset, b.inverse()),
+					RotoTranslation.combine(interpolatedOffset, a.toInverted()),
+					RotoTranslation.combine(interpolatedOffset, b.toInverted()),
 					time
 				);
 				assertAlmostEqualRotoTranslation(

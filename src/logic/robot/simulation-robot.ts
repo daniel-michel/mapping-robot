@@ -4,20 +4,21 @@ import { Ray, Vec } from "../math/vec.ts";
 import { sleep } from "../util.ts";
 import { World } from "../world.ts";
 import {
-	calculateOdometry,
+	calculateOdometryWithStepperMotor,
 	RangingSensorConfig,
 	RangingSensorScan,
 	Robot,
+	RobotWheelConfig,
 } from "./robot.ts";
 
 export class SimulationRobot implements Robot {
 	world: World;
-	wheelBase: number;
-	wheelRadius: number;
+	wheelConfig: RobotWheelConfig;
 	transform: RotoTranslation = new RotoTranslation(0, [0, 0]);
 
 	rangingSensor: RangingSensorConfig = {
 		rotationAngle: 135 * DEG_TO_RAD,
+		// rotationAngle: 300 * DEG_TO_RAD,
 		/** this is the targeted step size the actual step size may vary to fully utilize the rotationAngle */
 		targetAngleStepSize: 2 * DEG_TO_RAD,
 		distanceRange: [2, 780],
@@ -28,9 +29,12 @@ export class SimulationRobot implements Robot {
 
 	positionHistory: Vec[] = [];
 
-	constructor(wheelBase: number, wheelRadius: number, world: World) {
-		this.wheelBase = wheelBase;
-		this.wheelRadius = wheelRadius;
+	constructor(trackWidth: number, wheelRadius: number, world: World) {
+		this.wheelConfig = {
+			trackWidth,
+			radius: wheelRadius,
+			stepFraction: 1 / 2048,
+		};
 		this.world = world;
 	}
 
@@ -54,7 +58,9 @@ export class SimulationRobot implements Robot {
 				const result = this.world.castRay(rotatedRay);
 				if (result !== null) {
 					result.distance +=
-						random([-1, 1]) * this.rangingSensor.distanceAccuracy;
+						random([-1, 1]) *
+						this.rangingSensor.distanceAccuracy *
+						(result.distance / this.rangingSensor.distanceRange[1]) ** 0.8;
 					if (
 						result.distance < this.rangingSensor.distanceRange[0] ||
 						result.distance > this.rangingSensor.distanceRange[1]
@@ -103,18 +109,14 @@ export class SimulationRobot implements Robot {
 		}
 	}
 
-	driveAng(left: number, right: number) {
-		return this.driveDist(left * this.wheelRadius, right * this.wheelRadius);
-	}
-
-	async driveDist(left: number, right: number) {
+	async driveSteps(left: number, right: number) {
 		this.positionHistory.push(this.transform.translation.copy());
 		if (this.positionHistory.length > 1_000) {
 			this.positionHistory.shift();
 		}
 
-		const errorFactor = 0.1;
-		// const errorFactor = 0.05;
+		// const errorFactor = 0.1;
+		const errorFactor = 0.05;
 		// const errorFactor = 0;
 		const leftError = random([-1, 0.4]) * errorFactor * left;
 		const rightError = random([-1, 0.4]) * errorFactor * right;
@@ -126,7 +128,7 @@ export class SimulationRobot implements Robot {
 		const animate = true;
 
 		if (animate) {
-			const speed = 0.2;
+			const speed = 20;
 			const duration = Math.max(
 				Math.max(Math.abs(left), Math.abs(right)) / speed,
 				// 200
@@ -136,10 +138,10 @@ export class SimulationRobot implements Robot {
 			const end = start + duration;
 			while (performance.now() < end) {
 				const t = (performance.now() - start) / duration;
-				const { translation, rotation } = calculateOdometry(
+				const { translation, rotation } = calculateOdometryWithStepperMotor(
 					left * t,
 					right * t,
-					this.wheelBase
+					this.wheelConfig
 				);
 				const absoluteMovement = translation.rotate2d(originalOrientation);
 				this.transform.rotation = originalOrientation + rotation;
@@ -151,10 +153,10 @@ export class SimulationRobot implements Robot {
 			}
 		}
 
-		const { translation, rotation } = calculateOdometry(
+		const { translation, rotation } = calculateOdometryWithStepperMotor(
 			left,
 			right,
-			this.wheelBase
+			this.wheelConfig
 		);
 		const absoluteMovement = translation.rotate2d(originalOrientation);
 		this.transform.rotation = originalOrientation + rotation;

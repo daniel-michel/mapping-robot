@@ -19,35 +19,6 @@ export class Grid<T> {
 		this.level = level;
 	}
 
-	#split() {
-		if (!this.children.leaf) {
-			throw new Error("Already split");
-		}
-		if (this.level === 0) {
-			throw new Error("Cannot split level zero");
-		}
-		const newChildren = [];
-		for (let i = 0; i < 3 ** this.dimensions; i++) {
-			const child = (newChildren[i] = new Grid<T>(
-				this.dimensions,
-				this.level - 1
-			));
-			child.parent = this;
-			child.#unify(this.children.value);
-		}
-		this.children = {
-			leaf: false,
-			nodes: newChildren,
-		};
-	}
-
-	#unify(value: T | undefined) {
-		this.children = {
-			leaf: true,
-			value,
-		};
-	}
-
 	set(coord: Vec, value: T) {
 		const cell = this.getCell(coord);
 		cell.#unify(value);
@@ -125,10 +96,11 @@ export class Grid<T> {
 			const centerOffset = Math.floor(size / 2);
 			const count = size ** this.dimensions;
 			for (let i = 0; i < count; i++) {
-				// since calculateIndexCoordinate starts at -1, 1 has to be added again
-				const offset = calculateIndexCoordinate(i, this.dimensions).toMapped(
-					(c) => c + 1 - centerOffset
-				);
+				const offset = calculateIndexCoordinateN(
+					i,
+					this.dimensions,
+					size
+				).toMapped((c) => c - centerOffset);
 				const currentCoord = coord.toMapped((c, i) => c + offset.at(i));
 				const newValue = fn(node.children.value, (offset: number[]) => {
 					const neighborCoord = currentCoord.toMapped((c, i) => c + offset[i]);
@@ -254,25 +226,7 @@ export class Grid<T> {
 		const relativeCoord = this.#toRelativeCoordinate(coord);
 		const childIndex = calculateCoordinateIndex(relativeCoord);
 		if (relativeCoord.iter().some((coord) => Math.abs(coord) > 1)) {
-			// elevate the level of this node and move the children into a new child node
-			const newChild = new Grid<T>(this.dimensions, this.level);
-			this.level++;
-			newChild.children = this.children;
-			if (!newChild.children.leaf) {
-				for (const child of newChild.children.nodes) {
-					if (child) {
-						child.parent = newChild;
-					}
-				}
-			}
-			this.children = {
-				leaf: false,
-				nodes: [],
-			};
-			this.children.nodes[
-				calculateCoordinateIndex(relativeCoord.toMapped(() => 0))
-			] = newChild;
-			newChild.parent = this;
+			this.#extend();
 			return this.getCell(coord);
 		} else if (this.level === 0) {
 			// this is where the leaf is
@@ -391,6 +345,11 @@ export class Grid<T> {
 		if (data.leaf) {
 			grid.children = { leaf: true, value: data.value };
 		} else {
+			if (level === 0) {
+				throw new Error(
+					"The provided level was to shallow, cannot construct grid from serialized value"
+				);
+			}
 			grid.children = {
 				leaf: false,
 				nodes: data.nodes.map((child: any) =>
@@ -406,6 +365,145 @@ export class Grid<T> {
 			}
 		}
 		return grid;
+	}
+
+	static merge<T extends Grid<unknown>[], R>(
+		grids: T,
+		merge: (values: {
+			[I in keyof T]: T[I] extends Grid<infer U> ? U | undefined : never;
+		}) => R
+	): Grid<R> {
+		const dimensions = grids[0].dimensions;
+		if (grids.some((grid) => grid.dimensions !== dimensions)) {
+			throw new Error("Cannot merge grids of inconsistent dimension");
+		}
+		const maxLevel = grids.reduce((max, g) => Math.max(max, g.level), 0);
+		const newGrid = new Grid<R>(dimensions, maxLevel);
+		grids = grids.map((g) => {
+			let curr = g;
+			while (curr.level < maxLevel) {
+				const newParent = new Grid(dimensions, curr.level + 1);
+				newParent.children = {
+					leaf: false,
+					nodes: [],
+				};
+				newParent.children.nodes[
+					calculateCoordinateIndex(new Vec(new Array(dimensions).fill(0)))
+				] = curr;
+				curr = newParent;
+			}
+			return curr;
+		}) as T;
+		const allLeafs = grids.every((grid) => grid.children.leaf);
+		if (maxLevel === 0 && !allLeafs) {
+			console.error(grids);
+			throw new Error("How can this be");
+		}
+		if (allLeafs) {
+			newGrid.#unify(
+				grids.some(
+					(grid) => grid.children.leaf && grid.children.value !== undefined
+				)
+					? merge(
+							grids.map((g) =>
+								g.children.leaf ? g.children.value : undefined
+							) as {
+								[I in keyof T]: T[I] extends Grid<infer U>
+									? U | undefined
+									: never;
+							}
+					  )
+					: undefined
+			);
+		} else {
+			newGrid.children = {
+				leaf: false,
+				nodes: Array.from({ length: newGrid.maxChildren }, (_, childIndex) => {
+					if (
+						grids.every((grid) =>
+							grid.children.leaf
+								? grid.children.value === undefined ||
+								  grid.children.value === null
+								: !grid.children.nodes[childIndex]
+						)
+					) {
+						return undefined;
+					}
+					const gridChildren = grids.map((grid) => {
+						if (grid.children.leaf) {
+							const newCell = new Grid(dimensions, grid.level - 1);
+							newCell.#unify(grid.children.value);
+							return newCell;
+						}
+						const child = grid.children.nodes[childIndex];
+						if (!child) {
+							const newCell = new Grid(dimensions, grid.level - 1);
+							return newCell;
+						}
+						return child;
+					});
+					return Grid.merge(gridChildren as T, merge);
+				}),
+			};
+			for (const child of newGrid.children.nodes) {
+				if (child) {
+					child.parent = newGrid;
+				}
+			}
+			newGrid.#tryUnify();
+		}
+		return newGrid;
+	}
+
+	#extend() {
+		// elevate the level of this node and move the children into a new child node
+		const newChild = new Grid<T>(this.dimensions, this.level);
+		this.level++;
+		newChild.children = this.children;
+		if (!newChild.children.leaf) {
+			for (const child of newChild.children.nodes) {
+				if (child) {
+					child.parent = newChild;
+				}
+			}
+		}
+		this.children = {
+			leaf: false,
+			nodes: [],
+		};
+		this.children.nodes[
+			calculateCoordinateIndex(new Vec(new Array(this.dimensions).fill(0)))
+		] = newChild;
+		newChild.parent = this;
+	}
+
+	#split() {
+		if (!this.children.leaf) {
+			throw new Error("Already split");
+		}
+		if (this.level === 0) {
+			throw new Error("Cannot split level zero");
+		}
+		const newChildren = [];
+		for (let i = 0; i < 3 ** this.dimensions; i++) {
+			const child = (newChildren[i] = new Grid<T>(
+				this.dimensions,
+				this.level - 1
+			));
+			child.parent = this;
+			child.#unify(this.children.value);
+		}
+		this.children = {
+			leaf: false,
+			nodes: newChildren,
+		};
+	}
+
+	#unify(value: T | undefined) {
+		this.children = {
+			leaf: true,
+			value,
+		};
 	}
 
 	#tryUnify() {
@@ -461,6 +559,19 @@ function calculateIndexCoordinate(index: number, dimensions: number) {
 	for (let i = 0; i < dimensions; i++) {
 		coord[i] = (index % 3) - 1;
 		index = Math.floor(index / 3);
+	}
+	return new Vec(coord);
+}
+
+function calculateIndexCoordinateN(
+	index: number,
+	dimensions: number,
+	size: number
+) {
+	const coord: number[] = new Array(dimensions).fill(0);
+	for (let i = 0; i < dimensions; i++) {
+		coord[i] = index % size;
+		index = Math.floor(index / size);
 	}
 	return new Vec(coord);
 }

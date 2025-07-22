@@ -2,10 +2,15 @@ import { RotoTranslation } from "../math/roto-translation.ts";
 import { Vec } from "../math/vec.ts";
 
 export type Robot = {
-	wheelBase: number;
-	wheelRadius: number;
-	driveAng: (left: number, right: number) => Promise<void>;
+	wheelConfig: RobotWheelConfig;
+	driveSteps: (left: number, right: number) => Promise<void>;
 	scan: () => Promise<RangingSensorScan>;
+};
+
+export type RobotWheelConfig = {
+	trackWidth: number;
+	radius: number;
+	stepFraction: number;
 };
 
 export type RangingSensorConfig = {
@@ -33,10 +38,23 @@ export type RangingSensorScan = {
 	}[];
 };
 
+export function calculateOdometryWithStepperMotor(
+	leftSteps: number,
+	rightSteps: number,
+	config: RobotWheelConfig
+) {
+	const stepToDistRatio = config.stepFraction * config.radius * 2 * Math.PI;
+	return calculateOdometry(
+		leftSteps * stepToDistRatio,
+		rightSteps * stepToDistRatio,
+		config.trackWidth
+	);
+}
+
 export function calculateOdometry(
 	left: number,
 	right: number,
-	wheelBase: number
+	trackWidth: number
 ): RotoTranslation {
 	if (left === right) {
 		return new RotoTranslation(0, [0, left]);
@@ -54,11 +72,11 @@ export function calculateOdometry(
 	// d = r * a
 	// d = r * min(left, right) / (r - wb/2)
 
-	const radius = ((right + left) / (left - right)) * wheelBase * 0.5;
+	const radius = ((right + left) / (left - right)) * trackWidth * 0.5;
 	const angle =
 		right !== 0
-			? -right / (radius - wheelBase * 0.5)
-			: -left / (radius + wheelBase * 0.5);
+			? -right / (radius - trackWidth * 0.5)
+			: -left / (radius + trackWidth * 0.5);
 	const relativeX = -(Math.cos(angle) - 1) * radius;
 	const relativeY = Math.sin(angle) * -radius;
 	return new RotoTranslation(angle, [relativeX, relativeY]);

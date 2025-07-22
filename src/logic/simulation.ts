@@ -12,7 +12,7 @@ import { generateGraphWorld } from "./world-generation.ts";
 
 export class Simulation {
 	world = generateGraphWorld(hashString("hello world"));
-	robot = new SimulationRobot(15, 5, this.world);
+	robot = new SimulationRobot(9.5, 1.5, this.world);
 	camera: Camera = {
 		transform: this.robot.transform.copy(),
 		scale: 1,
@@ -28,7 +28,7 @@ export class Simulation {
 			saved(() => {
 				// camera transform
 				ctx.scale(this.camera.scale, -this.camera.scale);
-				rotoTranslateCtx(ctx, this.camera.transform.inverse());
+				rotoTranslateCtx(ctx, this.camera.transform.toInverted());
 
 				for (const wall of this.world.walls) {
 					ctx.beginPath();
@@ -85,16 +85,16 @@ export class Simulation {
 					const wheelWidth = 1;
 					ctx.fillStyle = "#888";
 					ctx.fillRect(
-						-0.5 * this.robot.wheelBase - wheelWidth,
-						-this.robot.wheelRadius,
+						-0.5 * this.robot.wheelConfig.trackWidth - wheelWidth,
+						-this.robot.wheelConfig.radius,
 						wheelWidth,
-						2 * this.robot.wheelRadius
+						2 * this.robot.wheelConfig.radius
 					);
 					ctx.fillRect(
-						0.5 * this.robot.wheelBase,
-						-this.robot.wheelRadius,
+						0.5 * this.robot.wheelConfig.trackWidth,
+						-this.robot.wheelConfig.radius,
 						wheelWidth,
-						2 * this.robot.wheelRadius
+						2 * this.robot.wheelConfig.radius
 					);
 				});
 			});
