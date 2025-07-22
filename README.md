@@ -15,7 +15,7 @@ The TypeScript program can either be accessed at https://daniel-michel.github.io
 
 To use the physical robot, you first need to set up the hardware as described below (including uploading the Arduino program).
 Then you can connect the Arduino over USB.
-Now you can use the TypeScript program and click on `Use Physical Robot` and `Connect Robot` to establish a connection. Make sure to use a [browser that supports the Web Serial API](https://caniuse.com/?search=web%20serial).
+Now you can use the TypeScript program and click on `Use Physical Robot` and `Connect Robot` to establish a connection. Make sure to use a [browser that supports the Web Serial API](https://caniuse.com/web-serial).
 
 > If, for some reason, when clicking `Connect Robot` no devices are found, you might want to try removing the filters at [arduino-robot.ts:124](./src/logic/robot/arduino-robot.ts#L124-L129)
 
